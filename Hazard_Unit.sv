@@ -14,22 +14,26 @@ module Hazard_Unit(
     input  logic [4:0] mem_wb_rd,
     
     // OUTPUTS
-    output logic        stall,
     output logic        [1:0]fwd_a,  
     output logic        [1:0]fwd_b,  
-    output logic        flush
-);
+    output logic        flush_IF_ID,
+    output logic        flush_DE_EX,
 
+    output logic        lw_stall
+
+);
+//NOTES:
 
     always_comb begin
+
         // ==========================================
-        //  DEFAULT OUTPUT VALUES (Prevents Latches)
+        //  DEFAULT OUTPUT VALUES
         // ==========================================
         fwd_a  = 2'b00; 
         fwd_b  = 2'b00;
-
-        stall = 1'b0;
-        flush      = 1'b0;
+        lw_stall = 1'b0;
+        flush_IF_ID = 1'b0;
+        flush_DE_EX = 1'b0;
 
         // ==========================================
         //  FORWARDING LOGIC (ALU Input A)
@@ -40,7 +44,6 @@ module Hazard_Unit(
         else if (mem_wb_rw && (mem_wb_rd != 0) && (mem_wb_rd == de_ex_rs1)) begin   //MEM
             fwd_a  = 2'b10; 
         end
-
         // ==========================================
         //  FORWARDING LOGIC (ALU Input B)
         // ==========================================
@@ -50,22 +53,18 @@ module Hazard_Unit(
         else if (mem_wb_rw && (mem_wb_rd != 0) && (mem_wb_rd == de_ex_rs2)) begin   //MEM
             fwd_b  = 2'b10; 
         end
-
         // ==========================================
         //  LOAD-USE HAZARD LOGIC (Comparing DE_EX to IF_ID)
         // ==========================================
         if (de_ex_mr && (de_ex_rd != 0) && ((if_id_rs1 == de_ex_rd) || (if_id_rs2 == de_ex_rd))) begin
-            stall = 1'b1;
+            lw_stall = 1'b1;
         end
-
         // ==========================================
         //  BRANCH / JUMP FLUSH LOGIC
         // ==========================================
-        
-        //EX_DCDR handles all the branch calulating and validifying
-        if (pc_sel != 0) begin  
-            flush = 1'b1;
-        end
+        flush_IF_ID = (pc_sel != 3'b000); //Flush IF/ID on a load-use stall or if the PC is being changed (branch/jump)
+        flush_DE_EX = lw_stall || (pc_sel != 3'b000); //Flush DE/EX
+
     end
        
 endmodule

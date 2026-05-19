@@ -4,8 +4,6 @@ typedef struct packed {
     
     logic [6:0] opcode;    
     
-    //IR
-    logic [31:0] ir;
     
     //ALU
     logic [3:0]  alu_fun;
@@ -13,8 +11,11 @@ typedef struct packed {
     logic [1:0]  alu_src_b; 
     logic [31:0] alu_result;
 
+    //MEMORY
     logic        memWrite;
     logic        memRead2;
+
+    //REGISTER FILE
     logic        regWrite;
     logic [1:0]  rf_wr_sel;
 
@@ -68,6 +69,7 @@ module OTTER(
 
     logic mem_rden1;
     logic [31:0] memory_data;
+    logic [31:0] ir;
 
     logic [31:0] IF_DE_ir;
     logic [31:0] IF_DE_pc;
@@ -84,12 +86,10 @@ module OTTER(
     logic        reg_Write, mem_write, mem_Read2;
     logic [1:0]  rf_wr_sel;
     
-    logic stall;
-    
-    assign mem_rden1 = !stall;
-    assign pc_write  = !stall;
+    logic lw_stall;
 
-    logic flush;
+    logic flush_IF_ID;
+    logic flush_DE_EX;
     
     logic [31:0] rs1_data;
     logic [31:0] rs2_data;
@@ -97,9 +97,12 @@ module OTTER(
     logic [1:0] fwd_a;
     logic [1:0] fwd_b;
 
+//=================================================================
 //==== Hazard Unit ================================================
-
+//=================================================================
 Hazard_Unit HU ( 
+
+    //INPUTS
     .pc_sel(pc_source),
     .ex_mem_rw(EX_MEM_reg.regWrite),
     .mem_wb_rw(MEM_WB_reg.regWrite),
@@ -111,13 +114,21 @@ Hazard_Unit HU (
     .de_ex_rd(DE_EX_reg.rd_addr),
     .ex_mem_rd(EX_MEM_reg.rd_addr),
     .mem_wb_rd(MEM_WB_reg.rd_addr),
-    .stall(stall),
+
+    //OUTPUTS
     .fwd_a(fwd_a),
     .fwd_b(fwd_b),
-    .flush(flush)
+    .flush_IF_ID(flush_IF_ID),
+    .flush_DE_EX(flush_DE_EX),
+    .lw_stall(lw_stall)
 );
 
+//==================================================================
 //==== Instruction Fetch ===========================================
+//==================================================================
+
+    assign    mem_rden1 = !lw_stall;
+    assign    pc_write   = !lw_stall;
 
     PC OTTER_PC(
         .CLK(CLK), 
@@ -133,16 +144,21 @@ Hazard_Unit HU (
         .PC_OUT_INC(pc_out_inc));
 
     always_ff @(posedge CLK) begin
-        if (flush) begin
+        if (flush_IF_ID||RST) begin
             IF_DE_pc      <= '0;
             IF_DE_pc_plus <= '0;
-        end else if (!stall) begin
+            IF_DE_ir      <= 32'h00000013; //NOP
+        end else if (!lw_stall) begin
             IF_DE_pc      <= pc_out;
             IF_DE_pc_plus <= pc_out_inc;
+            IF_DE_ir      <= ir;
         end
+        //If we are in a stall, then nothing happnens
     end
 
+//===================================================================
 //==== Instruction Decode ===========================================
+//===================================================================
 
     REG_FILE OTTER_REG_FILE(
         .CLK(CLK), 
@@ -155,7 +171,10 @@ Hazard_Unit HU (
         .RS2(rs2));
 
     ImmediateGenerator OTTER_IMGEN(
+        //INPUTS
         .IR(IF_DE_ir[31:7]),
+
+        //OUTPUTS
         .U_TYPE(Utype), 
         .I_TYPE(Itype),
         .S_TYPE(Stype), 
@@ -163,9 +182,16 @@ Hazard_Unit HU (
         .J_TYPE(Jtype));
 
     CU_DCDR OTTER_DCDR(
+        //INPUTS
         .IR_30(IF_DE_ir[30]), 
-        .IR_OPCODE(opcode_t'(IF_DE_ir[6:0])),  
+        .IR_OPCODE(IF_DE_ir[6:0]),  
         .IR_FUNCT(IF_DE_ir[14:12]),
+        .BR_EQ(1'b0), 
+        .BR_LT(1'b0),
+        .BR_LTU(1'b0),
+
+        //OUTPUTS
+        .PC_SOURCE(),
         .ALU_FUN(alu_fun), 
         .ALU_SRCA(alu_src_a),
         .ALU_SRCB(alu_src_b),
@@ -175,25 +201,36 @@ Hazard_Unit HU (
         .MEM_RDEN2(mem_Read2));
 
     always_ff @(posedge CLK) begin
-        if (stall || flush) begin
-            DE_EX_reg <= '0;
+        if (flush_DE_EX || RST) begin
+
+            DE_EX_reg <= '0;//inject a NOP by clearing the DE/EX pipeline register
+
         end else begin
-            DE_EX_reg.opcode   <= opcode_t'(IF_DE_ir[6:0]);   
+            
+        //IR CONCATENATIONS
+            DE_EX_reg.opcode   <= IF_DE_ir[6:0];   
             DE_EX_reg.func3    <= IF_DE_ir[14:12];
+        //REGISTER ADDRESSES
             DE_EX_reg.rs1_addr <= IF_DE_ir[19:15];
             DE_EX_reg.rs2_addr <= IF_DE_ir[24:20];
             DE_EX_reg.rd_addr  <= IF_DE_ir[11:7];
+        //REGISTER VALUES
             DE_EX_reg.rs1      <= rs1;
             DE_EX_reg.rs2      <= rs2;
+        //PC CONTROL SIGNALS
             DE_EX_reg.pc       <= IF_DE_pc;
             DE_EX_reg.pc_plus  <= IF_DE_pc_plus;
+        //ALU CONTROL SIGNALS
             DE_EX_reg.alu_fun  <= alu_fun;
             DE_EX_reg.alu_src_a<= alu_src_a;
             DE_EX_reg.alu_src_b<= alu_src_b;
+        //MEMORY CONTROL SIGNALS
             DE_EX_reg.memWrite <= mem_write;
             DE_EX_reg.memRead2 <= mem_Read2;
+        //REGISTER FILE CONTROL SIGNALS
             DE_EX_reg.rf_wr_sel<= rf_wr_sel;
             DE_EX_reg.regWrite <= reg_Write;
+        //IMMEDIATE VALUES
             DE_EX_reg.u_immed  <= Utype;
             DE_EX_reg.s_immed  <= Stype;
             DE_EX_reg.i_immed  <= Itype;
@@ -202,13 +239,17 @@ Hazard_Unit HU (
         end
     end
 
-//==== Execute ======================================================
 
+//===================================================================
+//==== Execute ======================================================
+//====================================================================
+    
+    // Forwarding Muxes (before ALU src muxes because they feed into them)
     always_comb begin   
         case (fwd_a)
             2'b00: rs1_data = DE_EX_reg.rs1;
             2'b01: rs1_data = EX_MEM_reg.alu_result;
-            2'b10: rs1_data = wd;
+            2'b10: rs1_data = wd; //MEM_WB value
             default: rs1_data = DE_EX_reg.rs1;
         endcase
     end
@@ -217,11 +258,12 @@ Hazard_Unit HU (
         case (fwd_b)
             2'b00: rs2_data = DE_EX_reg.rs2; 
             2'b01: rs2_data = EX_MEM_reg.alu_result;
-            2'b10: rs2_data = wd;
+            2'b10: rs2_data = wd; //MEM_WB value
             default: rs2_data = DE_EX_reg.rs2;
         endcase
     end
 
+    //ALU SRC MUXES
     always_comb begin
         case (DE_EX_reg.alu_src_a)
             1'b0:    alu_A = rs1_data;
@@ -239,32 +281,39 @@ Hazard_Unit HU (
             default: alu_B = rs2_data;
         endcase
     end
-
+    
     BCG OTTER_BCG(
+        //INPUTS
         .RS1(rs1_data), 
         .RS2(rs2_data),
+        //OUTPUTS
         .BR_EQ(br_eq), 
         .BR_LT(br_lt), 
         .BR_LTU(br_ltu));
         
-    EX_DCDR EXE_DE ( 
-        .de_ex_opcode(DE_EX_reg.opcode),    
-        .BR_LT(br_lt),
-        .BR_LTU(br_ltu),
-        .BR_EQ(br_eq),
-        .de_ex_f3(DE_EX_reg.func3),
-        .PC_SOURCE(pc_source));
 
     BAG OTTER_BAG(
+        //INPUTS
         .RS1(rs1_data), 
         .I_TYPE(DE_EX_reg.i_immed), 
         .J_TYPE(DE_EX_reg.j_immed),
         .B_TYPE(DE_EX_reg.b_immed), 
         .FROM_PC(DE_EX_reg.pc),
+        //OUTPUTS
         .JAL(jal), 
         .JALR(jalr), 
         .BRANCH(branch));
-        
+    
+    EX_DCDR EX_DCDR(
+        //INPUTS
+        .de_ex_opcode(DE_EX_reg.opcode),    
+        .BR_LT(br_lt),
+        .BR_LTU(br_ltu),
+        .BR_EQ(br_eq),
+        .de_ex_f3(DE_EX_reg.func3),
+        //OUTPUTS
+        .PC_SOURCE(pc_source));
+      
     ALU OTTER_ALU(
         .SRC_A(alu_A), 
         .SRC_B(alu_B),
@@ -272,15 +321,29 @@ Hazard_Unit HU (
         .RESULT(alu_result));
 
     always_ff @(posedge CLK) begin
-        EX_MEM_reg.rd_addr    <= DE_EX_reg.rd_addr;
-        EX_MEM_reg.rs2        <= DE_EX_reg.rs2;
-        EX_MEM_reg.alu_result <= alu_result;
-        EX_MEM_reg.memRead2   <= DE_EX_reg.memRead2;
-        EX_MEM_reg.memWrite   <= DE_EX_reg.memWrite;
-        EX_MEM_reg.regWrite   <= DE_EX_reg.regWrite;
-        EX_MEM_reg.func3      <= DE_EX_reg.func3;
-        EX_MEM_reg.pc_plus    <= DE_EX_reg.pc_plus;
-        EX_MEM_reg.rf_wr_sel  <= DE_EX_reg.rf_wr_sel;
+        if (RST) begin
+            EX_MEM_reg <= '0; //Inject a NOP by clearing the EX/MEM
+        end else begin
+
+            //RD ADDRESS
+            EX_MEM_reg.rd_addr    <= DE_EX_reg.rd_addr;
+            //RS2 VALUE (for stores)
+            EX_MEM_reg.rs2        <= DE_EX_reg.rs2;
+            //ALU RESULT
+            EX_MEM_reg.alu_result <= alu_result;
+            //MEMORY READ
+            EX_MEM_reg.memRead2   <= DE_EX_reg.memRead2;
+            //MEMORY WRITE
+            EX_MEM_reg.memWrite   <= DE_EX_reg.memWrite;
+            //REGISTER WRITE
+            EX_MEM_reg.regWrite   <= DE_EX_reg.regWrite;
+            //FUNC3
+            EX_MEM_reg.func3      <= DE_EX_reg.func3;
+            //PC PLUS
+            EX_MEM_reg.pc_plus    <= DE_EX_reg.pc_plus;
+            //RF Write Select
+            EX_MEM_reg.rf_wr_sel  <= DE_EX_reg.rf_wr_sel;
+        end
     end
 
 //==== Memory ======================================================
@@ -295,32 +358,44 @@ Hazard_Unit HU (
         .MEM_WE2(EX_MEM_reg.memWrite),
         .MEM_ADDR1(pc_out[15:2]),
         .MEM_ADDR2(EX_MEM_reg.alu_result),
-        .MEM_DIN2(EX_MEM_reg.rs2),
+        .MEM_DIN2(EX_MEM_reg.rs2),  //STORE DATA
         .MEM_SIZE(EX_MEM_reg.func3[1:0]),
         .MEM_SIGN(EX_MEM_reg.func3[2]),
         .IO_IN(IOBUS_IN), 
         .IO_WR(IOBUS_WR),
-        .MEM_DOUT1(IF_DE_ir),
-        .MEM_DOUT2(memory_data),
-        .CLR_DOUT1(RST || flush));
+        .MEM_DOUT1(ir),    //Instruction Memory
+        .MEM_DOUT2(memory_data), //Data Memory
+        .CLR_DOUT1(RST || flush_IF_ID));
 
     always_ff @(posedge CLK) begin
+        if (RST) begin
+            MEM_WB_reg <= '0; //Inject a NOP by clearing the MEM/WB
+        end else begin
+        //RD ADDRESS
         MEM_WB_reg.rd_addr    <= EX_MEM_reg.rd_addr;
+        //ALU RESULT
         MEM_WB_reg.alu_result <= EX_MEM_reg.alu_result;
-        MEM_WB_reg.pc_plus    <= EX_MEM_reg.pc_plus;
-        MEM_WB_reg.regWrite   <= EX_MEM_reg.regWrite;
-        MEM_WB_reg.rf_wr_sel  <= EX_MEM_reg.rf_wr_sel;
+        //MEMORY DATA
         MEM_WB_reg.mem_data   <= memory_data;
+        //REGISTER WRITE
+        MEM_WB_reg.regWrite   <= EX_MEM_reg.regWrite;
+        //RF Write Select
+        MEM_WB_reg.rf_wr_sel  <= EX_MEM_reg.rf_wr_sel;
+        //PC PLUS
+        MEM_WB_reg.pc_plus    <= EX_MEM_reg.pc_plus;
+        end
     end
 
 //==== Write Back ==================================================
 
     FourMux OTTER_REG_MUX(
+        //INPUTS
         .SEL(MEM_WB_reg.rf_wr_sel),
         .ZERO(MEM_WB_reg.pc_plus),
         .ONE(32'b0),
         .TWO(MEM_WB_reg.mem_data),
         .THREE(MEM_WB_reg.alu_result),
+        //OUTPUT
         .OUT(wd));
 
 endmodule
