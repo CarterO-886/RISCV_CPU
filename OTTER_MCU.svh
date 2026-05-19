@@ -46,7 +46,7 @@ typedef struct packed {
     logic [31:0] mem_data;
 } pipe_reg_t;
 
-module OTTER(
+module OTTER_MCU(
     input  logic        CLK,
     input  logic        RST,
     input  logic [31:0] IOBUS_IN,
@@ -74,6 +74,7 @@ module OTTER(
     logic [31:0] IF_DE_ir;
     logic [31:0] IF_DE_pc;
     logic [31:0] IF_DE_pc_plus;
+    logic [31:0] fetch_pc; // pc_out delayed one cycle — matches the instruction in ir
 
     logic [31:0] wd, rs1, rs2;
     logic [31:0] Utype, Itype, Stype, Btype, Jtype;
@@ -143,17 +144,23 @@ Hazard_Unit HU (
         .PC_OUT(pc_out), 
         .PC_OUT_INC(pc_out_inc));
 
+    // BRAM is synchronous: ir holds the instruction fetched at fetch_pc (last cycle's pc_out).
+    // Capture fetch_pc so IF_DE_pc matches the instruction actually in ir.
+    always_ff @(posedge CLK) begin
+        if (!lw_stall) fetch_pc <= pc_out;
+    end
+
     always_ff @(posedge CLK) begin
         if (flush_IF_ID||RST) begin
             IF_DE_pc      <= '0;
             IF_DE_pc_plus <= '0;
             IF_DE_ir      <= 32'h00000013; //NOP
         end else if (!lw_stall) begin
-            IF_DE_pc      <= pc_out;
-            IF_DE_pc_plus <= pc_out_inc;
+            IF_DE_pc      <= fetch_pc;   // address of the instruction in ir
+            IF_DE_pc_plus <= pc_out;     // fetch_pc + 4 = return address
             IF_DE_ir      <= ir;
         end
-        //If we are in a stall, then nothing happnens
+        //If we are in a stall, then nothing happens
     end
 
 //===================================================================
@@ -327,8 +334,8 @@ Hazard_Unit HU (
 
             //RD ADDRESS
             EX_MEM_reg.rd_addr    <= DE_EX_reg.rd_addr;
-            //RS2 VALUE (for stores)
-            EX_MEM_reg.rs2        <= DE_EX_reg.rs2;
+            //RS2 VALUE (for stores) — use forwarded value so stores see correct data
+            EX_MEM_reg.rs2        <= rs2_data;
             //ALU RESULT
             EX_MEM_reg.alu_result <= alu_result;
             //MEMORY READ

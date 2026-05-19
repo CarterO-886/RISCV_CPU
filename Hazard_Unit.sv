@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-
 module Hazard_Unit(
     input  logic [2:0]  pc_sel,
     input  logic        ex_mem_rw,
@@ -56,9 +55,7 @@ module Hazard_Unit(
         // ==========================================
         //  LOAD-USE HAZARD LOGIC (Comparing DE_EX to IF_ID)
         // ==========================================
-        if (de_ex_mr && (de_ex_rd != 0) && ((if_id_rs1 == de_ex_rd) || (if_id_rs2 == de_ex_rd))) begin
-            lw_stall = 1'b1;
-        end
+        lw_stall = de_ex_mr && (de_ex_rd != 0) && ((if_id_rs1 == de_ex_rd) || (if_id_rs2 == de_ex_rd));
         // ==========================================
         //  BRANCH / JUMP FLUSH LOGIC
         // ==========================================
