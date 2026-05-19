@@ -4,6 +4,7 @@ module Hazard_Unit(
     input  logic        ex_mem_rw,
     input  logic        mem_wb_rw,
     input  logic        de_ex_mr,  
+    input  logic        ex_mem_mr, // Load data is still settling while the load is in MEM.
     input  logic [4:0] if_id_rs1,  
     input  logic [4:0] de_ex_rs1,
     input  logic [4:0] if_id_rs2,
@@ -53,9 +54,15 @@ module Hazard_Unit(
             fwd_b  = 2'b10; 
         end
         // ==========================================
-        //  LOAD-USE HAZARD LOGIC (Comparing DE_EX to IF_ID)
+        //  LOAD-USE HAZARD LOGIC (Comparing DE_EX/EX_MEM to IF_ID)
         // ==========================================
-        lw_stall = de_ex_mr && (de_ex_rd != 0) && ((if_id_rs1 == de_ex_rd) || (if_id_rs2 == de_ex_rd));
+        // Synchronous memory makes load data usable after MEM, so stall for
+        // dependencies on loads in either EX or MEM.
+        lw_stall =
+            (de_ex_mr && (de_ex_rd != 0) &&
+             ((if_id_rs1 == de_ex_rd) || (if_id_rs2 == de_ex_rd))) ||
+            (ex_mem_mr && (ex_mem_rd != 0) &&
+             ((if_id_rs1 == ex_mem_rd) || (if_id_rs2 == ex_mem_rd)));
         // ==========================================
         //  BRANCH / JUMP FLUSH LOGIC
         // ==========================================

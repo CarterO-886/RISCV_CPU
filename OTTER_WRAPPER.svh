@@ -33,8 +33,9 @@ module OTTER_Wrapper(
            
     // OUTPUT PORT IDS //////////////////////////////////////////////////////
     // In future labs you can add more MMIO
-    localparam LEDS_AD    = 32'h11080000; //32'h11000020
-    localparam SSEG_AD    = 32'h110C0000; //32'h11000040
+    // Match the MMIO addresses used by the loaded test program.
+    localparam LEDS_AD    = 32'h1100C000;
+    localparam SSEG_AD    = 32'h1100C00C;
     
    // Signals for connecting OTTER_MCU to OTTER_wrapper /////////////////////
    logic clk_50 = 0;
@@ -46,7 +47,7 @@ module OTTER_Wrapper(
    logic [15:0] r_SSEG;  
      
    // Declare OTTER_CPU ////////////////////////////////////////////////////
-   OTTER CPU (.RST(s_reset), .CLK(clk_50), 
+   OTTER_MCU CPU (.RST(s_reset), .CLK(clk_50), // Instantiate the actual CPU module name.
                   .IOBUS_OUT(IOBUS_out), .IOBUS_IN(IOBUS_in),
                   .IOBUS_ADDR(IOBUS_addr), .IOBUS_WR(IOBUS_wr)); 
  
