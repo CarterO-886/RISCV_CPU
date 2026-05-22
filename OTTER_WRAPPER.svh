@@ -33,8 +33,9 @@ module OTTER_Wrapper(
            
     // OUTPUT PORT IDS //////////////////////////////////////////////////////
     // In future labs you can add more MMIO
-    localparam LEDS_AD    = 32'h11080000; //32'h11000020
-    localparam SSEG_AD    = 32'h110C0000; //32'h11000040
+    // Match the MMIO addresses used by the loaded test program.
+    localparam LEDS_AD    = 32'h1100C000;
+    localparam SSEG_AD    = 32'h1100C00C;
     
    // Signals for connecting OTTER_MCU to OTTER_wrapper /////////////////////
    logic clk_50 = 0;

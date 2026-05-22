@@ -108,6 +108,8 @@ Hazard_Unit HU (
     .ex_mem_rw(EX_MEM_reg.regWrite),
     .mem_wb_rw(MEM_WB_reg.regWrite),
     .de_ex_mr(DE_EX_reg.memRead2),
+    // Tell the hazard unit about loads still in MEM for synchronous memory timing.
+    .ex_mem_mr(EX_MEM_reg.memRead2),
     .if_id_rs1(IF_DE_ir[19:15]),
     .de_ex_rs1(DE_EX_reg.rs1_addr),
     .if_id_rs2(IF_DE_ir[24:20]),
@@ -400,7 +402,7 @@ Hazard_Unit HU (
         .SEL(MEM_WB_reg.rf_wr_sel),
         .ZERO(MEM_WB_reg.pc_plus),
         .ONE(32'b0),
-        .TWO(MEM_WB_reg.mem_data),
+        .TWO(memory_data), // Use the live synchronous memory output for load writeback.
         .THREE(MEM_WB_reg.alu_result),
         //OUTPUT
         .OUT(wd));
