@@ -46,7 +46,7 @@ module OTTER_Wrapper(
    logic [15:0] r_SSEG;  
      
    // Declare OTTER_CPU ////////////////////////////////////////////////////
-   OTTER CPU (.RST(s_reset), .CLK(clk_50), 
+   OTTER_MCU CPU (.RST(s_reset), .CLK(clk_50), 
                   .IOBUS_OUT(IOBUS_out), .IOBUS_IN(IOBUS_in),
                   .IOBUS_ADDR(IOBUS_addr), .IOBUS_WR(IOBUS_wr)); 
  
