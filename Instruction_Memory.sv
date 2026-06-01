@@ -12,10 +12,10 @@
 
 
 module Instruction_Memory(
-    localparam ADDR_WIDTH = ,
-    localparam DATA_WIDTH = ,
+    localparam ADDR_WIDTH = 32,
+    localparam DATA_WIDTH = 32,
 
-    logic [31:0] storage_array [255:0]  //i-bit address with max 2^i words of storage
+    logic [31:0] storage_array [0:16383]  //i-bit address with max 2^i words of storage
 
 )(
     input logic CLK,
@@ -36,20 +36,19 @@ module Instruction_Memory(
 );
 
 
-initial begin
-    $readmeh("memory.mem", storage_array);
-end
+initial $readmeh("memory.mem", storage_array,0,16383);
+
 
 always_ff @(posedge CLK) begin
 
-    assign data_out1 = storage_array[pc_in]
-    assign data_out2 = storage_array[pc_in + 1]
-    assign data_out3 = storage_array[pc_in + 2]
-    assign data_out4 = storage_array[pc_in + 3]
-    assign data_out5 = storage_array[pc_in + 4]
-    assign data_out6 = storage_array[pc_in + 5]
-    assign data_out7 = storage_array[pc_in + 6]
-    assign data_out8 = storage_array[pc_in + 7]
+    assign data_out1 = storage_array[pc_in[31:2]]
+    assign data_out2 = storage_array[pc_in[31:2] + 1]
+    assign data_out3 = storage_array[pc_in[31:2] + 2]
+    assign data_out4 = storage_array[pc_in[31:2] + 3]
+    assign data_out5 = storage_array[pc_in[31:2] + 4]
+    assign data_out6 = storage_array[pc_in[31:2] + 5]
+    assign data_out7 = storage_array[pc_in[31:2] + 6]
+    assign data_out8 = storage_array[pc_in[31:2] + 7]
 
 end
 
