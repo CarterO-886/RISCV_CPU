@@ -1,62 +1,64 @@
-'timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module L1_I_Cache (
-    input        [31:0] PC,
-    input               CLK,
-    input               update,
-    input logic  [31:0] w0,
-    input logic  [31:0] w1,
-    input logic  [31:0] w2,
-    input logic  [31:0] w3,
-    input logic  [31:0] w4,
-    input logic  [31:0] w5,
-    input logic  [31:0] w6,
-    input logic  [31:0] w7,
+    input  logic [31:0] PC,
+    input  logic        CLK,
+    input  logic        RST,
+    input  logic        update,
+    input  logic [31:0] w0,
+    input  logic [31:0] w1,
+    input  logic [31:0] w2,
+    input  logic [31:0] w3,
+    input  logic [31:0] w4,
+    input  logic [31:0] w5,
+    input  logic [31:0] w6,
+    input  logic [31:0] w7,
+
     output logic [31:0] rd,
     output logic        hit,
     output logic        miss
 );
 
-    parameter NUM_BLOCKS       = 16;
-    parameter BLOCK_SIZE       = 8;
-    parameter INDEX_SIZE       = 4;
-    parameter WORD_OFFSET_SIZE = 3;
-    parameter BYTE_OFFSET      = 0;
-    parameter TAG_SIZE         = 32 - INDEX_SIZE - WORD_OFFSET_SIZE - BYTE_OFFSET;
+    localparam NUM_BLOCKS       = 16;
+    localparam BLOCK_SIZE       = 8;
+    localparam INDEX_SIZE       = 4;
+    localparam WORD_OFFSET_SIZE = 3;
+    localparam BYTE_OFFSET_SIZE = 2;
+    localparam TAG_SIZE         = 32 - INDEX_SIZE - WORD_OFFSET_SIZE - BYTE_OFFSET_SIZE;
 
-    logic [31:0]       data[NUM_BLOCKS-1:0][BLOCK_SIZE-1:0];
-    logic [TAG_SIZE-1:0] tags[NUM_BLOCKS-1:0];
-    logic              valid_bits[NUM_BLOCKS-1:0];
-    logic [3:0]        index;
-    logic [TAG_SIZE-1:0] cache_tag, pc_tag;
-    logic [2:0]        pc_offset;
+    logic [31:0]          data [NUM_BLOCKS-1:0][BLOCK_SIZE-1:0];
+    logic [TAG_SIZE-1:0]  tags [NUM_BLOCKS-1:0];
+    logic                 valid_bits [NUM_BLOCKS-1:0];
+    logic [INDEX_SIZE-1:0] index;
+    logic [WORD_OFFSET_SIZE-1:0] pc_offset;
+    logic [TAG_SIZE-1:0]  pc_tag;
+
+    assign index     = PC[8:5];
+    assign pc_offset = PC[4:2];
+    assign pc_tag    = PC[31:9];
+    assign hit       = valid_bits[index] && (tags[index] == pc_tag);
+    assign miss      = ~hit;
+
+    always_comb begin
+        rd = 32'h00000013; // nop
+        if (hit)
+            rd = data[index][pc_offset];
+    end
 
     initial begin
-        int i;
-        int j;
-        for (i = 0; i < NUM_BLOCKS; i = i + 1) begin //initializing RAM to 0
-            for (j = 0; j < BLOCK_SIZE; j = j + 1)
-                data[i][j] = 32'b0;
-            tags[i]       = 32'b0;
+        for (int i = 0; i < NUM_BLOCKS; i++) begin
+            tags[i]       = '0;
             valid_bits[i] = 1'b0;
+            for (int j = 0; j < BLOCK_SIZE; j++)
+                data[i][j] = 32'b0;
         end
     end
 
-    assign index     = PC[8:5];
-    assign validity  = valid_bits[index];
-    assign cache_tag = tags[index];
-    assign pc_offset = PC[4:2];
-    assign pc_tag    = PC[31:9];
-    assign hit       = (validity && (cache_tag == pc_tag));
-    assign miss      = !hit;
-
-    always_comb begin
-        rd = 32'h00000013; //nop
-        if (hit) rd = data[index][pc_offset];
-    end
-
-    always_ff @(negedge CLK) begin
-        if (update) begin
+    always_ff @(posedge CLK) begin
+        if (RST) begin
+            for (int i = 0; i < NUM_BLOCKS; i++)
+                valid_bits[i] <= 1'b0;
+        end else if (update) begin
             data[index][0]    <= w0;
             data[index][1]    <= w1;
             data[index][2]    <= w2;
@@ -65,6 +67,7 @@ module L1_I_Cache (
             data[index][5]    <= w5;
             data[index][6]    <= w6;
             data[index][7]    <= w7;
+            tags[index]       <= pc_tag;
             valid_bits[index] <= 1'b1;
         end
     end

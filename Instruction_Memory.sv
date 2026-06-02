@@ -1,28 +1,14 @@
-'timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Author: Carter Oates
-// Create Date: 5/20/26 
-// Module Name: Instruction_Memory
-// Description: Basic Instruction Memory for two stage memory architecture for OTTER
-// Function: Lowest part of memory architecure. Stores bulk addresses and data. 
-//           Simply will output blocks of data for a direct address cahce setup.
-//           Don't normally want to do this because it is very space hungry on raw silicon. 
-// Summary:  Bulk storage unit 
-//////////////////////////////////////////////////////////////////////////////////
+`timescale 1ns / 1ps
 
-
-module Instruction_Memory(
-    localparam ADDR_WIDTH = 32,
-    localparam DATA_WIDTH = 32,
-
-    logic [31:0] storage_array [0:16383]  //i-bit address with max 2^i words of storage
-
+module Instruction_Memory #(
+    parameter ADDR_WIDTH = 32,
+    parameter DATA_WIDTH = 32,
+    parameter DEPTH      = 16384
 )(
-    input logic CLK,
-
-    input logic RST,
-
-    input logic [ADDR_WIDTH-1:0] pc_in,
+    input  logic                  CLK,
+    input  logic                  RST,
+    input  logic                  read_en,
+    input  logic [ADDR_WIDTH-1:0] pc_in,
 
     output logic [DATA_WIDTH-1:0] data_out1,
     output logic [DATA_WIDTH-1:0] data_out2,
@@ -31,25 +17,38 @@ module Instruction_Memory(
     output logic [DATA_WIDTH-1:0] data_out5,
     output logic [DATA_WIDTH-1:0] data_out6,
     output logic [DATA_WIDTH-1:0] data_out7,
-    output logic [DATA_WIDTH-1:0] data_out8,
-
+    output logic [DATA_WIDTH-1:0] data_out8
 );
 
+    logic [DATA_WIDTH-1:0] storage_array [0:DEPTH-1];
+    logic [13:0] block_base;
 
-initial $readmeh("memory.mem", storage_array,0,16383);
+    assign block_base = {pc_in[15:5], 3'b000};
 
+    initial begin
+        $readmemh("performance.mem", storage_array, 0, DEPTH-1);
+    end
 
-always_ff @(posedge CLK) begin
-
-    assign data_out1 = storage_array[pc_in[31:2]]
-    assign data_out2 = storage_array[pc_in[31:2] + 1]
-    assign data_out3 = storage_array[pc_in[31:2] + 2]
-    assign data_out4 = storage_array[pc_in[31:2] + 3]
-    assign data_out5 = storage_array[pc_in[31:2] + 4]
-    assign data_out6 = storage_array[pc_in[31:2] + 5]
-    assign data_out7 = storage_array[pc_in[31:2] + 6]
-    assign data_out8 = storage_array[pc_in[31:2] + 7]
-
-end
+    always_ff @(posedge CLK) begin
+        if (RST) begin
+            data_out1 <= 32'h00000013;
+            data_out2 <= 32'h00000013;
+            data_out3 <= 32'h00000013;
+            data_out4 <= 32'h00000013;
+            data_out5 <= 32'h00000013;
+            data_out6 <= 32'h00000013;
+            data_out7 <= 32'h00000013;
+            data_out8 <= 32'h00000013;
+        end else if (read_en) begin
+            data_out1 <= storage_array[block_base + 14'd0];
+            data_out2 <= storage_array[block_base + 14'd1];
+            data_out3 <= storage_array[block_base + 14'd2];
+            data_out4 <= storage_array[block_base + 14'd3];
+            data_out5 <= storage_array[block_base + 14'd4];
+            data_out6 <= storage_array[block_base + 14'd5];
+            data_out7 <= storage_array[block_base + 14'd6];
+            data_out8 <= storage_array[block_base + 14'd7];
+        end
+    end
 
 endmodule

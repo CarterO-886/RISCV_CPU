@@ -67,14 +67,12 @@ module OTTER_MCU(
 
     assign pc_rst   = RST;
 
-    logic mem_rden1;
     logic [31:0] memory_data;
     logic [31:0] ir;
 
     logic [31:0] IF_DE_ir;
     logic [31:0] IF_DE_pc;
     logic [31:0] IF_DE_pc_plus;
-    logic [31:0] fetch_pc; // pc_out delayed one cycle — matches the instruction in ir
 
     logic [31:0] wd, rs1, rs2;
     logic [31:0] Utype, Itype, Stype, Btype, Jtype;
@@ -88,6 +86,7 @@ module OTTER_MCU(
     logic [1:0]  rf_wr_sel;
     
     logic lw_stall;
+    logic cache_stall;
 
     logic flush_IF_ID;
     logic flush_DE_EX;
@@ -97,6 +96,32 @@ module OTTER_MCU(
     
     logic [1:0] fwd_a;
     logic [1:0] fwd_b;
+
+    logic        i_cache_hit;
+    logic        i_cache_miss;
+    logic        i_cache_update;
+    logic        i_l2_read;
+    logic        i_stall;
+    logic [31:0] i_w0, i_w1, i_w2, i_w3;
+    logic [31:0] i_w4, i_w5, i_w6, i_w7;
+
+    logic        d_cacheable;
+    logic        d_data_read;
+    logic        d_data_write;
+    logic        d_cache_hit;
+    logic        d_cache_miss;
+    logic        d_cache_fill;
+    logic        d_l2_read;
+    logic        d_l2_write;
+    logic        d_stall;
+    logic        d_evict_valid;
+    logic [31:0] d_cache_data;
+    logic [31:0] d_w0, d_w1, d_w2, d_w3;
+    logic [31:0] d_evict_addr;
+    logic [31:0] d_evict_w0, d_evict_w1, d_evict_w2, d_evict_w3;
+    logic [31:0] io_load_data;
+
+    assign cache_stall = i_stall || d_stall;
 
 //=================================================================
 //==== Hazard Unit ================================================
@@ -130,8 +155,7 @@ Hazard_Unit HU (
 //==== Instruction Fetch ===========================================
 //==================================================================
 
-    assign    mem_rden1 = !lw_stall;
-    assign    pc_write   = !lw_stall;
+    assign pc_write = !(lw_stall || cache_stall);
 
     PC OTTER_PC(
         .CLK(CLK), 
@@ -146,20 +170,62 @@ Hazard_Unit HU (
         .PC_OUT(pc_out), 
         .PC_OUT_INC(pc_out_inc));
 
-    // BRAM is synchronous: ir holds the instruction fetched at fetch_pc (last cycle's pc_out).
-    // Capture fetch_pc so IF_DE_pc matches the instruction actually in ir.
-    always_ff @(posedge CLK) begin
-        if (!lw_stall) fetch_pc <= pc_out;
-    end
+    CacheFSM I_CACHE_FSM(
+        .hit(i_cache_hit),
+        .miss(i_cache_miss),
+        .CLK(CLK),
+        .RST(RST),
+        .l2_read(i_l2_read),
+        .update(i_cache_update),
+        .pc_stall(i_stall));
+
+    Instruction_Memory I_L2_MEMORY(
+        .CLK(CLK),
+        .RST(RST),
+        .read_en(i_l2_read),
+        .pc_in(pc_out),
+        .data_out1(i_w0),
+        .data_out2(i_w1),
+        .data_out3(i_w2),
+        .data_out4(i_w3),
+        .data_out5(i_w4),
+        .data_out6(i_w5),
+        .data_out7(i_w6),
+        .data_out8(i_w7));
+
+    L1_I_Cache I_CACHE(
+        .PC(pc_out),
+        .CLK(CLK),
+        .RST(RST),
+        .update(i_cache_update),
+        .w0(i_w0),
+        .w1(i_w1),
+        .w2(i_w2),
+        .w3(i_w3),
+        .w4(i_w4),
+        .w5(i_w5),
+        .w6(i_w6),
+        .w7(i_w7),
+        .rd(ir),
+        .hit(i_cache_hit),
+        .miss(i_cache_miss));
 
     always_ff @(posedge CLK) begin
-        if (flush_IF_ID||RST) begin
+        if (RST) begin
+            IF_DE_pc      <= '0;
+            IF_DE_pc_plus <= '0;
+            IF_DE_ir      <= 32'h00000013; //NOP
+        end else if (cache_stall) begin
+            IF_DE_pc      <= IF_DE_pc;
+            IF_DE_pc_plus <= IF_DE_pc_plus;
+            IF_DE_ir      <= IF_DE_ir;
+        end else if (flush_IF_ID) begin
             IF_DE_pc      <= '0;
             IF_DE_pc_plus <= '0;
             IF_DE_ir      <= 32'h00000013; //NOP
         end else if (!lw_stall) begin
-            IF_DE_pc      <= fetch_pc;   // address of the instruction in ir
-            IF_DE_pc_plus <= pc_out;     // fetch_pc + 4 = return address
+            IF_DE_pc      <= pc_out;
+            IF_DE_pc_plus <= pc_out_inc;
             IF_DE_ir      <= ir;
         end
         //If we are in a stall, then nothing happens
@@ -210,7 +276,15 @@ Hazard_Unit HU (
         .MEM_RDEN2(mem_Read2));
 
     always_ff @(posedge CLK) begin
-        if (flush_DE_EX || RST) begin
+        if (RST) begin
+
+            DE_EX_reg <= '0;//inject a NOP by clearing the DE/EX pipeline register
+
+        end else if (cache_stall) begin
+
+            DE_EX_reg <= DE_EX_reg;
+
+        end else if (flush_DE_EX) begin
 
             DE_EX_reg <= '0;//inject a NOP by clearing the DE/EX pipeline register
 
@@ -332,6 +406,8 @@ Hazard_Unit HU (
     always_ff @(posedge CLK) begin
         if (RST) begin
             EX_MEM_reg <= '0; //Inject a NOP by clearing the EX/MEM
+        end else if (cache_stall) begin
+            EX_MEM_reg <= EX_MEM_reg;
         end else begin
 
             //RD ADDRESS
@@ -359,26 +435,97 @@ Hazard_Unit HU (
 
     assign IOBUS_ADDR = EX_MEM_reg.alu_result;
     assign IOBUS_OUT  = EX_MEM_reg.rs2;
+    assign d_cacheable = (EX_MEM_reg.alu_result < 32'h00010000);
+    assign d_data_read = EX_MEM_reg.memRead2 && d_cacheable;
+    assign d_data_write = EX_MEM_reg.memWrite && d_cacheable;
+    assign IOBUS_WR = EX_MEM_reg.memWrite && !d_cacheable && !cache_stall;
 
-    Memory OTTER_MEMORY(
-        .MEM_CLK(CLK), 
-        .MEM_RDEN1(mem_rden1),
-        .MEM_RDEN2(EX_MEM_reg.memRead2),
-        .MEM_WE2(EX_MEM_reg.memWrite),
-        .MEM_ADDR1(pc_out[15:2]),
-        .MEM_ADDR2(EX_MEM_reg.alu_result),
-        .MEM_DIN2(EX_MEM_reg.rs2),  //STORE DATA
-        .MEM_SIZE(EX_MEM_reg.func3[1:0]),
-        .MEM_SIGN(EX_MEM_reg.func3[2]),
-        .IO_IN(IOBUS_IN), 
-        .IO_WR(IOBUS_WR),
-        .MEM_DOUT1(ir),    //Instruction Memory
-        .MEM_DOUT2(memory_data), //Data Memory
-        .CLR_DOUT1(RST || flush_IF_ID));
+    always_comb begin
+        case ({EX_MEM_reg.func3[2], EX_MEM_reg.func3[1:0], EX_MEM_reg.alu_result[1:0]})
+            5'b00011: io_load_data = {{24{IOBUS_IN[31]}}, IOBUS_IN[31:24]};
+            5'b00010: io_load_data = {{24{IOBUS_IN[23]}}, IOBUS_IN[23:16]};
+            5'b00001: io_load_data = {{24{IOBUS_IN[15]}}, IOBUS_IN[15:8]};
+            5'b00000: io_load_data = {{24{IOBUS_IN[7]}},  IOBUS_IN[7:0]};
+
+            5'b00110: io_load_data = {{16{IOBUS_IN[31]}}, IOBUS_IN[31:16]};
+            5'b00101: io_load_data = {{16{IOBUS_IN[23]}}, IOBUS_IN[23:8]};
+            5'b00100: io_load_data = {{16{IOBUS_IN[15]}}, IOBUS_IN[15:0]};
+
+            5'b01000: io_load_data = IOBUS_IN;
+
+            5'b10011: io_load_data = {24'b0, IOBUS_IN[31:24]};
+            5'b10010: io_load_data = {24'b0, IOBUS_IN[23:16]};
+            5'b10001: io_load_data = {24'b0, IOBUS_IN[15:8]};
+            5'b10000: io_load_data = {24'b0, IOBUS_IN[7:0]};
+
+            5'b10110: io_load_data = {16'b0, IOBUS_IN[31:16]};
+            5'b10101: io_load_data = {16'b0, IOBUS_IN[23:8]};
+            5'b10100: io_load_data = {16'b0, IOBUS_IN[15:0]};
+
+            default:  io_load_data = 32'b0;
+        endcase
+    end
+
+    assign memory_data = d_cacheable ? d_cache_data : io_load_data;
+
+    Data_FSM D_CACHE_FSM(
+        .CLK(CLK),
+        .RST(RST),
+        .data_read(d_data_read),
+        .data_write(d_data_write),
+        .hit(d_cache_hit),
+        .miss(d_cache_miss),
+        .evict_valid(d_evict_valid),
+        .FSM_write(d_cache_fill),
+        .l2_read(d_l2_read),
+        .l2_write(d_l2_write),
+        .stall(d_stall));
+
+    L1_D_Cache D_CACHE(
+        .CLK(CLK),
+        .RST(RST),
+        .alu_result(EX_MEM_reg.alu_result),
+        .rs2_data(EX_MEM_reg.rs2),
+        .data_read(d_data_read),
+        .data_write(d_data_write),
+        .mem_size(EX_MEM_reg.func3[1:0]),
+        .mem_sign(EX_MEM_reg.func3[2]),
+        .FSM_write(d_cache_fill),
+        .w0(d_w0),
+        .w1(d_w1),
+        .w2(d_w2),
+        .w3(d_w3),
+        .hit(d_cache_hit),
+        .miss(d_cache_miss),
+        .data(d_cache_data),
+        .evict_valid(d_evict_valid),
+        .evict_addr(d_evict_addr),
+        .evict_w0(d_evict_w0),
+        .evict_w1(d_evict_w1),
+        .evict_w2(d_evict_w2),
+        .evict_w3(d_evict_w3));
+
+    Data_Memory D_L2_MEMORY(
+        .CLK(CLK),
+        .RST(RST),
+        .read_en(d_l2_read),
+        .write_en(d_l2_write),
+        .read_addr(EX_MEM_reg.alu_result),
+        .write_addr(d_evict_addr),
+        .write_w0(d_evict_w0),
+        .write_w1(d_evict_w1),
+        .write_w2(d_evict_w2),
+        .write_w3(d_evict_w3),
+        .out1(d_w0),
+        .out2(d_w1),
+        .out3(d_w2),
+        .out4(d_w3));
 
     always_ff @(posedge CLK) begin
         if (RST) begin
             MEM_WB_reg <= '0; //Inject a NOP by clearing the MEM/WB
+        end else if (cache_stall) begin
+            MEM_WB_reg <= MEM_WB_reg;
         end else begin
         //RD ADDRESS
         MEM_WB_reg.rd_addr    <= EX_MEM_reg.rd_addr;
@@ -402,7 +549,7 @@ Hazard_Unit HU (
         .SEL(MEM_WB_reg.rf_wr_sel),
         .ZERO(MEM_WB_reg.pc_plus),
         .ONE(32'b0),
-        .TWO(memory_data), // Use the live synchronous memory output for load writeback.
+        .TWO(MEM_WB_reg.mem_data),
         .THREE(MEM_WB_reg.alu_result),
         //OUTPUT
         .OUT(wd));
