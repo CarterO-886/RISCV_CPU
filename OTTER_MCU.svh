@@ -179,20 +179,6 @@ Hazard_Unit HU (
         .update(i_cache_update),
         .pc_stall(i_stall));
 
-    Instruction_Memory I_L2_MEMORY(
-        .CLK(CLK),
-        .RST(RST),
-        .read_en(i_l2_read),
-        .pc_in(pc_out),
-        .data_out1(i_w0),
-        .data_out2(i_w1),
-        .data_out3(i_w2),
-        .data_out4(i_w3),
-        .data_out5(i_w4),
-        .data_out6(i_w5),
-        .data_out7(i_w6),
-        .data_out8(i_w7));
-
     L1_I_Cache I_CACHE(
         .PC(pc_out),
         .CLK(CLK),
@@ -505,21 +491,33 @@ Hazard_Unit HU (
         .evict_w2(d_evict_w2),
         .evict_w3(d_evict_w3));
 
-    Data_Memory D_L2_MEMORY(
+    L2_Memory SHARED_L2_MEMORY(
         .CLK(CLK),
         .RST(RST),
-        .read_en(d_l2_read),
-        .write_en(d_l2_write),
-        .read_addr(EX_MEM_reg.alu_result),
-        .write_addr(d_evict_addr),
-        .write_w0(d_evict_w0),
-        .write_w1(d_evict_w1),
-        .write_w2(d_evict_w2),
-        .write_w3(d_evict_w3),
-        .out1(d_w0),
-        .out2(d_w1),
-        .out3(d_w2),
-        .out4(d_w3));
+
+        .i_read_en(i_l2_read),
+        .i_addr(pc_out),
+        .i_out1(i_w0),
+        .i_out2(i_w1),
+        .i_out3(i_w2),
+        .i_out4(i_w3),
+        .i_out5(i_w4),
+        .i_out6(i_w5),
+        .i_out7(i_w6),
+        .i_out8(i_w7),
+
+        .d_read_en(d_l2_read),
+        .d_write_en(d_l2_write),
+        .d_read_addr(EX_MEM_reg.alu_result),
+        .d_write_addr(d_evict_addr),
+        .d_write_w0(d_evict_w0),
+        .d_write_w1(d_evict_w1),
+        .d_write_w2(d_evict_w2),
+        .d_write_w3(d_evict_w3),
+        .d_out1(d_w0),
+        .d_out2(d_w1),
+        .d_out3(d_w2),
+        .d_out4(d_w3));
 
     always_ff @(posedge CLK) begin
         if (RST) begin

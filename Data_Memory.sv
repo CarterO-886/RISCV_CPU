@@ -3,6 +3,7 @@
 module Data_Memory #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
+    parameter LINE_WORDS = 8,
     parameter DEPTH      = 16384
 )(
     input  logic                  CLK,
@@ -22,36 +23,42 @@ module Data_Memory #(
     output logic [DATA_WIDTH-1:0] out4
 );
 
-    logic [DATA_WIDTH-1:0] storage_array [0:DEPTH-1];
-    logic [13:0] read_base;
-    logic [13:0] write_base;
+    localparam LINE_WIDTH = DATA_WIDTH * LINE_WORDS;
+    localparam LINE_DEPTH = DEPTH / LINE_WORDS;
 
-    assign read_base  = {read_addr[15:4], 2'b00};
-    assign write_base = {write_addr[15:4], 2'b00};
+    (* ram_style = "block" *) logic [LINE_WIDTH-1:0] line_array [0:LINE_DEPTH-1];
+    logic [LINE_WIDTH-1:0] line_q;
+    logic                  read_upper_half_q;
+    logic [10:0]           read_index;
+    logic [10:0]           write_index;
+
+    assign read_index  = read_addr[15:5];
+    assign write_index = write_addr[15:5];
+
+    assign out1 = read_upper_half_q ? line_q[159:128] : line_q[31:0];
+    assign out2 = read_upper_half_q ? line_q[191:160] : line_q[63:32];
+    assign out3 = read_upper_half_q ? line_q[223:192] : line_q[95:64];
+    assign out4 = read_upper_half_q ? line_q[255:224] : line_q[127:96];
 
     initial begin
-        $readmemh("performance.mem", storage_array, 0, DEPTH-1);
+        $readmemh("performance_l2_lines.mem", line_array, 0, LINE_DEPTH-1);
     end
 
     always_ff @(posedge CLK) begin
         if (RST) begin
-            out1 <= 32'b0;
-            out2 <= 32'b0;
-            out3 <= 32'b0;
-            out4 <= 32'b0;
+            line_q <= '0;
+            read_upper_half_q <= 1'b0;
         end else begin
             if (write_en) begin
-                storage_array[write_base + 14'd0] <= write_w0;
-                storage_array[write_base + 14'd1] <= write_w1;
-                storage_array[write_base + 14'd2] <= write_w2;
-                storage_array[write_base + 14'd3] <= write_w3;
+                if (write_addr[4])
+                    line_array[write_index][255:128] <= {write_w3, write_w2, write_w1, write_w0};
+                else
+                    line_array[write_index][127:0] <= {write_w3, write_w2, write_w1, write_w0};
             end
 
             if (read_en) begin
-                out1 <= storage_array[read_base + 14'd0];
-                out2 <= storage_array[read_base + 14'd1];
-                out3 <= storage_array[read_base + 14'd2];
-                out4 <= storage_array[read_base + 14'd3];
+                line_q <= line_array[read_index];
+                read_upper_half_q <= read_addr[4];
             end
         end
     end

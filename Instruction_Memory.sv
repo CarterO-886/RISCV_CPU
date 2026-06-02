@@ -3,6 +3,7 @@
 module Instruction_Memory #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
+    parameter LINE_WORDS = 8,
     parameter DEPTH      = 16384
 )(
     input  logic                  CLK,
@@ -20,35 +21,33 @@ module Instruction_Memory #(
     output logic [DATA_WIDTH-1:0] data_out8
 );
 
-    logic [DATA_WIDTH-1:0] storage_array [0:DEPTH-1];
-    logic [13:0] block_base;
+    localparam LINE_WIDTH = DATA_WIDTH * LINE_WORDS;
+    localparam LINE_DEPTH = DEPTH / LINE_WORDS;
 
-    assign block_base = {pc_in[15:5], 3'b000};
+    (* ram_style = "block" *) logic [LINE_WIDTH-1:0] line_array [0:LINE_DEPTH-1];
+    logic [LINE_WIDTH-1:0] line_q;
+    logic [10:0]           line_index;
+
+    assign line_index = pc_in[15:5];
+
+    assign data_out1 = line_q[31:0];
+    assign data_out2 = line_q[63:32];
+    assign data_out3 = line_q[95:64];
+    assign data_out4 = line_q[127:96];
+    assign data_out5 = line_q[159:128];
+    assign data_out6 = line_q[191:160];
+    assign data_out7 = line_q[223:192];
+    assign data_out8 = line_q[255:224];
 
     initial begin
-        $readmemh("performance.mem", storage_array, 0, DEPTH-1);
+        $readmemh("performance_l2_lines.mem", line_array, 0, LINE_DEPTH-1);
     end
 
     always_ff @(posedge CLK) begin
-        if (RST) begin
-            data_out1 <= 32'h00000013;
-            data_out2 <= 32'h00000013;
-            data_out3 <= 32'h00000013;
-            data_out4 <= 32'h00000013;
-            data_out5 <= 32'h00000013;
-            data_out6 <= 32'h00000013;
-            data_out7 <= 32'h00000013;
-            data_out8 <= 32'h00000013;
-        end else if (read_en) begin
-            data_out1 <= storage_array[block_base + 14'd0];
-            data_out2 <= storage_array[block_base + 14'd1];
-            data_out3 <= storage_array[block_base + 14'd2];
-            data_out4 <= storage_array[block_base + 14'd3];
-            data_out5 <= storage_array[block_base + 14'd4];
-            data_out6 <= storage_array[block_base + 14'd5];
-            data_out7 <= storage_array[block_base + 14'd6];
-            data_out8 <= storage_array[block_base + 14'd7];
-        end
+        if (RST)
+            line_q <= {LINE_WORDS{32'h00000013}};
+        else if (read_en)
+            line_q <= line_array[line_index];
     end
 
 endmodule
