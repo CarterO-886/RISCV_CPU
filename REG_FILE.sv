@@ -1,13 +1,15 @@
 `timescale 1ns / 1ps
+
+
 module REG_FILE(
-    input  logic        CLK,
-    input  logic        EN,
-    input  logic [4:0]  ADR1,
-    input  logic [4:0]  ADR2,
-    input  logic [4:0]  WA,
-    input  logic [31:0] WD,
-    output logic [31:0] RS1,
-    output logic [31:0] RS2
+    input  logic        clk,
+    input  logic        en,
+    input  logic [4:0]  adr1,
+    input  logic [4:0]  adr2,
+    input  logic [4:0]  wa,
+    input  logic [31:0] wd,
+    output logic [31:0] rs1,
+    output logic [31:0] rs2
 );
     
     logic [31:0] ram[0:31];
@@ -19,24 +21,24 @@ module REG_FILE(
         end
     end
 
-    // CHANGED: write-first async reads
+    //write-first async reads
     always_comb begin
-        if (EN && WA == ADR1 && WA != 5'd0)
-            RS1 = WD;
+        if (en && wa == adr1 && wa != 5'd0)
+            rs1 = wd;
         else
-            RS1 = ram[ADR1];
+            rs1 = ram[adr1];
     end
 
     always_comb begin
-        if (EN && WA == ADR2 && WA != 5'd0)
-            RS2 = WD;
+        if (en && wa == adr2 && wa != 5'd0)
+            rs2 = wd;
         else
-            RS2 = ram[ADR2];
+            rs2 = ram[adr2];
     end
    
-    always_ff @(posedge CLK) begin
-        if (EN == 1'b1 && WA != 5'd0) begin
-            ram[WA] <= WD;
+    always_ff @(posedge clk) begin
+        if (en == 1'b1 && wa != 5'd0) begin
+            ram[wa] <= wd;
         end
     end 
     

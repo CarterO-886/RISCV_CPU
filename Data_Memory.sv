@@ -1,33 +1,33 @@
 `timescale 1ns / 1ps
 
 module Data_Memory #(
-    parameter ADDR_WIDTH = 32,
-    parameter DATA_WIDTH = 32,
-    parameter LINE_WORDS = 8,
-    parameter DEPTH      = 16384
+    parameter addr_width = 32,
+    parameter data_width = 32,
+    parameter line_words = 8,
+    parameter depth      = 16384
 )(
-    input  logic                  CLK,
-    input  logic                  RST,
+    input  logic                  clk,
+    input  logic                  rst,
     input  logic                  read_en,
     input  logic                  write_en,
-    input  logic [ADDR_WIDTH-1:0] read_addr,
-    input  logic [ADDR_WIDTH-1:0] write_addr,
-    input  logic [DATA_WIDTH-1:0] write_w0,
-    input  logic [DATA_WIDTH-1:0] write_w1,
-    input  logic [DATA_WIDTH-1:0] write_w2,
-    input  logic [DATA_WIDTH-1:0] write_w3,
+    input  logic [addr_width-1:0] read_addr,
+    input  logic [addr_width-1:0] write_addr,
+    input  logic [data_width-1:0] write_w0,
+    input  logic [data_width-1:0] write_w1,
+    input  logic [data_width-1:0] write_w2,
+    input  logic [data_width-1:0] write_w3,
 
-    output logic [DATA_WIDTH-1:0] out1,
-    output logic [DATA_WIDTH-1:0] out2,
-    output logic [DATA_WIDTH-1:0] out3,
-    output logic [DATA_WIDTH-1:0] out4
+    output logic [data_width-1:0] out1,
+    output logic [data_width-1:0] out2,
+    output logic [data_width-1:0] out3,
+    output logic [data_width-1:0] out4
 );
 
-    localparam LINE_WIDTH = DATA_WIDTH * LINE_WORDS;
-    localparam LINE_DEPTH = DEPTH / LINE_WORDS;
+    localparam line_width = data_width * line_words;
+    localparam line_depth = depth / line_words;
 
-    (* ram_style = "block" *) logic [LINE_WIDTH-1:0] line_array [0:LINE_DEPTH-1];
-    logic [LINE_WIDTH-1:0] line_q;
+    (* ram_style = "block" *) logic [line_width-1:0] line_array [0:line_depth-1];
+    logic [line_width-1:0] line_q;
     logic                  read_upper_half_q;
     logic [10:0]           read_index;
     logic [10:0]           write_index;
@@ -41,11 +41,11 @@ module Data_Memory #(
     assign out4 = read_upper_half_q ? line_q[255:224] : line_q[127:96];
 
     initial begin
-        $readmemh("performance_l2_lines.mem", line_array, 0, LINE_DEPTH-1);
+        $readmemh("performance_l2_lines.mem", line_array, 0, line_depth-1);
     end
 
-    always_ff @(posedge CLK) begin
-        if (RST) begin
+    always_ff @(posedge clk) begin
+        if (rst) begin
             line_q <= '0;
             read_upper_half_q <= 1'b0;
         end else begin

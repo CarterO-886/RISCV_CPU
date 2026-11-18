@@ -2,8 +2,8 @@
 
 module L1_I_Cache (
     input  logic [31:0] PC,
-    input  logic        CLK,
-    input  logic        RST,
+    input  logic        clk,
+    input  logic        rst,
     input  logic        update,
     input  logic [31:0] w0,
     input  logic [31:0] w1,
@@ -19,19 +19,19 @@ module L1_I_Cache (
     output logic        miss
 );
 
-    localparam NUM_BLOCKS       = 16;
-    localparam BLOCK_SIZE       = 8;
-    localparam INDEX_SIZE       = 4;
-    localparam WORD_OFFSET_SIZE = 3;
-    localparam BYTE_OFFSET_SIZE = 2;
-    localparam TAG_SIZE         = 32 - INDEX_SIZE - WORD_OFFSET_SIZE - BYTE_OFFSET_SIZE;
+    localparam num_blocks       = 16;
+    localparam block_size       = 8;
+    localparam index_size       = 4;
+    localparam word_offset_size = 3;
+    localparam byte_offset_size = 2;
+    localparam tag_size         = 32 - index_size - word_offset_size - byte_offset_size;
 
-    logic [31:0]          data [NUM_BLOCKS-1:0][BLOCK_SIZE-1:0];
-    logic [TAG_SIZE-1:0]  tags [NUM_BLOCKS-1:0];
-    logic                 valid_bits [NUM_BLOCKS-1:0];
-    logic [INDEX_SIZE-1:0] index;
-    logic [WORD_OFFSET_SIZE-1:0] pc_offset;
-    logic [TAG_SIZE-1:0]  pc_tag;
+    logic [31:0]          data [num_blocks-1:0][block_size-1:0];
+    logic [tag_size-1:0]  tags [num_blocks-1:0];
+    logic                 valid_bits [num_blocks-1:0];
+    logic [index_size-1:0] index;
+    logic [word_offset_size-1:0] pc_offset;
+    logic [tag_size-1:0]  pc_tag;
 
     assign index     = PC[8:5];
     assign pc_offset = PC[4:2];
@@ -46,17 +46,17 @@ module L1_I_Cache (
     end
 
     initial begin
-        for (int i = 0; i < NUM_BLOCKS; i++) begin
+        for (int i = 0; i < num_blocks; i++) begin
             tags[i]       = '0;
             valid_bits[i] = 1'b0;
-            for (int j = 0; j < BLOCK_SIZE; j++)
+            for (int j = 0; j < block_size; j++)
                 data[i][j] = 32'b0;
         end
     end
 
-    always_ff @(posedge CLK) begin
-        if (RST) begin
-            for (int i = 0; i < NUM_BLOCKS; i++)
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            for (int i = 0; i < num_blocks; i++)
                 valid_bits[i] <= 1'b0;
         end else if (update) begin
             data[index][0]    <= w0;

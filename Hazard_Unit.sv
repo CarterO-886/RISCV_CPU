@@ -16,8 +16,8 @@ module Hazard_Unit(
     // OUTPUTS
     output logic        [1:0]fwd_a,  
     output logic        [1:0]fwd_b,  
-    output logic        flush_IF_ID,
-    output logic        flush_DE_EX,
+    output logic        flush_if_id,
+    output logic        flush_de_ex,
 
     output logic        lw_stall
 
@@ -32,8 +32,8 @@ module Hazard_Unit(
         fwd_a  = 2'b00; 
         fwd_b  = 2'b00;
         lw_stall = 1'b0;
-        flush_IF_ID = 1'b0;
-        flush_DE_EX = 1'b0;
+        flush_if_id = 1'b0;
+        flush_de_ex = 1'b0;
 
         // ==========================================
         //  FORWARDING LOGIC (ALU Input A)
@@ -66,8 +66,8 @@ module Hazard_Unit(
         // ==========================================
         //  BRANCH / JUMP FLUSH LOGIC
         // ==========================================
-        flush_IF_ID = (pc_sel != 3'b000); //Flush IF/ID on a load-use stall or if the PC is being changed (branch/jump)
-        flush_DE_EX = lw_stall || (pc_sel != 3'b000); //Flush DE/EX
+        flush_if_id = (pc_sel != 3'b000); //Flush IF/ID on a load-use stall or if the PC is being changed (branch/jump)
+        flush_de_ex = lw_stall || (pc_sel != 3'b000); //Flush DE/EX
 
     end
        

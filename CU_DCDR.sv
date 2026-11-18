@@ -1,121 +1,121 @@
 `timescale 1ns / 1ps
 
 module CU_DCDR(
-    input  logic       IR_30,
-    input  logic [6:0] IR_OPCODE,
-    input  logic [2:0] IR_FUNCT,
+    input  logic       ir_30,
+    input  logic [6:0] ir_opcode,
+    input  logic [2:0] ir_funct,
 
-    input  logic       BR_EQ,
-    input  logic       BR_LT,
-    input  logic       BR_LTU,
+    input  logic       br_eq,
+    input  logic       br_lt,
+    input  logic       br_ltu,
 
-    output logic [3:0] ALU_FUN,
-    output logic       ALU_SRCA,
-    output logic [1:0] ALU_SRCB,
-    output logic [2:0] PC_SOURCE,
-    output logic [1:0] RF_WR_SEL,
-    output logic       REG_WRITE,
-    output logic       MEM_WE2,
-    output logic       MEM_RDEN2
+    output logic [3:0] alu_fun,
+    output logic       alu_srca,
+    output logic [1:0] alu_srcb,
+    output logic [2:0] pc_source,
+    output logic [1:0] rf_wr_sel,
+    output logic       reg_write,
+    output logic       mem_we2,
+    output logic       mem_rden2
 );
 
     always_comb begin
-        ALU_FUN   = 4'b0000;
-        ALU_SRCA  = 1'b0;
-        ALU_SRCB  = 2'b00;
-        PC_SOURCE = 3'b000;
-        RF_WR_SEL = 2'b00;
-        REG_WRITE = 1'b0;
-        MEM_WE2   = 1'b0;
-        MEM_RDEN2 = 1'b0;
+        alu_fun   = 4'b0000;
+        alu_srca  = 1'b0;
+        alu_srcb  = 2'b00;
+        pc_source = 3'b000;
+        rf_wr_sel = 2'b00;
+        reg_write = 1'b0;
+        mem_we2   = 1'b0;
+        mem_rden2 = 1'b0;
 
-        case (IR_OPCODE)
+        case (ir_opcode)
 
             7'b0110111: begin // LUI
-                ALU_FUN   = 4'b1001;
-                ALU_SRCA  = 1'b1;
-                ALU_SRCB  = 2'b00;
-                RF_WR_SEL = 2'b11;
-                REG_WRITE = 1'b1;
+                alu_fun   = 4'b1001;
+                alu_srca  = 1'b1;
+                alu_srcb  = 2'b00;
+                rf_wr_sel = 2'b11;
+                reg_write = 1'b1;
             end
 
             7'b0010111: begin // AUIPC
-                ALU_FUN   = 4'b0000;
-                ALU_SRCA  = 1'b1;
-                ALU_SRCB  = 2'b11;
-                RF_WR_SEL = 2'b11;
-                REG_WRITE = 1'b1;
+                alu_fun   = 4'b0000;
+                alu_srca  = 1'b1;
+                alu_srcb  = 2'b11;
+                rf_wr_sel = 2'b11;
+                reg_write = 1'b1;
             end
 
             7'b1101111: begin // JAL
-                PC_SOURCE = 3'b011;
-                RF_WR_SEL = 2'b00;
-                REG_WRITE = 1'b1;
+                pc_source = 3'b011;
+                rf_wr_sel = 2'b00;
+                reg_write = 1'b1;
             end
 
             7'b1100111: begin // JALR
-                PC_SOURCE = 3'b001;
-                RF_WR_SEL = 2'b00;
-                REG_WRITE = 1'b1;
+                pc_source = 3'b001;
+                rf_wr_sel = 2'b00;
+                reg_write = 1'b1;
             end
 
             7'b0000011: begin // LOAD
-                ALU_FUN   = 4'b0000;
-                ALU_SRCA  = 1'b0;
-                ALU_SRCB  = 2'b01;
-                RF_WR_SEL = 2'b10;
-                REG_WRITE = 1'b1;
-                MEM_RDEN2 = 1'b1;
+                alu_fun   = 4'b0000;
+                alu_srca  = 1'b0;
+                alu_srcb  = 2'b01;
+                rf_wr_sel = 2'b10;
+                reg_write = 1'b1;
+                mem_rden2 = 1'b1;
             end
 
             7'b0100011: begin // STORE
-                ALU_FUN   = 4'b0000;
-                ALU_SRCA  = 1'b0;
-                ALU_SRCB  = 2'b10;
-                MEM_WE2   = 1'b1;
+                alu_fun   = 4'b0000;
+                alu_srca  = 1'b0;
+                alu_srcb  = 2'b10;
+                mem_we2   = 1'b1;
             end
 
             7'b0010011: begin // OP-IMM
-                ALU_SRCA  = 1'b0;
-                ALU_SRCB  = 2'b01;
-                RF_WR_SEL = 2'b11;
-                REG_WRITE = 1'b1;
+                alu_srca  = 1'b0;
+                alu_srcb  = 2'b01;
+                rf_wr_sel = 2'b11;
+                reg_write = 1'b1;
 
-                case (IR_FUNCT)
-                    3'b000: ALU_FUN = 4'b0000; // ADDI
-                    3'b001: ALU_FUN = 4'b0001; // SLLI
-                    3'b010: ALU_FUN = 4'b0010; // SLTI
-                    3'b011: ALU_FUN = 4'b0011; // SLTIU
-                    3'b100: ALU_FUN = 4'b0100; // XORI
+                case (ir_funct)
+                    3'b000: alu_fun = 4'b0000; // ADDI
+                    3'b001: alu_fun = 4'b0001; // SLLI
+                    3'b010: alu_fun = 4'b0010; // SLTI
+                    3'b011: alu_fun = 4'b0011; // SLTIU
+                    3'b100: alu_fun = 4'b0100; // XORI
                     3'b101: begin
-                        if (IR_30)
-                            ALU_FUN = 4'b1101; // SRAI
+                        if (ir_30)
+                            alu_fun = 4'b1101; // SRAI
                         else
-                            ALU_FUN = 4'b0101; // SRLI
+                            alu_fun = 4'b0101; // SRLI
                     end
-                    3'b110: ALU_FUN = 4'b0110; // ORI
-                    3'b111: ALU_FUN = 4'b0111; // ANDI
-                    default: ALU_FUN = 4'b0000;
+                    3'b110: alu_fun = 4'b0110; // ORI
+                    3'b111: alu_fun = 4'b0111; // ANDI
+                    default: alu_fun = 4'b0000;
                 endcase
             end
 
             7'b0110011: begin // OP
-                ALU_SRCA  = 1'b0;
-                ALU_SRCB  = 2'b00;
-                RF_WR_SEL = 2'b11;
-                REG_WRITE = 1'b1;
-                ALU_FUN   = {IR_30, IR_FUNCT};
+                alu_srca  = 1'b0;
+                alu_srcb  = 2'b00;
+                rf_wr_sel = 2'b11;
+                reg_write = 1'b1;
+                alu_fun   = {ir_30, ir_funct};
             end
 
             7'b1100011: begin // BRANCH
-                case (IR_FUNCT)
-                    3'b000: PC_SOURCE = BR_EQ  ? 3'b010 : 3'b000;
-                    3'b001: PC_SOURCE = !BR_EQ ? 3'b010 : 3'b000;
-                    3'b100: PC_SOURCE = BR_LT  ? 3'b010 : 3'b000;
-                    3'b101: PC_SOURCE = !BR_LT ? 3'b010 : 3'b000;
-                    3'b110: PC_SOURCE = BR_LTU ? 3'b010 : 3'b000;
-                    3'b111: PC_SOURCE = !BR_LTU ? 3'b010 : 3'b000;
-                    default: PC_SOURCE = 3'b000;
+                case (ir_funct)
+                    3'b000: pc_source = br_eq  ? 3'b010 : 3'b000;
+                    3'b001: pc_source = !br_eq ? 3'b010 : 3'b000;
+                    3'b100: pc_source = br_lt  ? 3'b010 : 3'b000;
+                    3'b101: pc_source = !br_lt ? 3'b010 : 3'b000;
+                    3'b110: pc_source = br_ltu ? 3'b010 : 3'b000;
+                    3'b111: pc_source = !br_ltu ? 3'b010 : 3'b000;
+                    default: pc_source = 3'b000;
                 endcase
             end
 

@@ -1,31 +1,31 @@
 `timescale 1ns / 1ps
 
 module Instruction_Memory #(
-    parameter ADDR_WIDTH = 32,
-    parameter DATA_WIDTH = 32,
-    parameter LINE_WORDS = 8,
-    parameter DEPTH      = 16384
+    parameter addr_width = 32,
+    parameter data_width = 32,
+    parameter line_words = 8,
+    parameter depth      = 16384
 )(
-    input  logic                  CLK,
-    input  logic                  RST,
+    input  logic                  clk,
+    input  logic                  rst,
     input  logic                  read_en,
-    input  logic [ADDR_WIDTH-1:0] pc_in,
+    input  logic [addr_width-1:0] pc_in,
 
-    output logic [DATA_WIDTH-1:0] data_out1,
-    output logic [DATA_WIDTH-1:0] data_out2,
-    output logic [DATA_WIDTH-1:0] data_out3,
-    output logic [DATA_WIDTH-1:0] data_out4,
-    output logic [DATA_WIDTH-1:0] data_out5,
-    output logic [DATA_WIDTH-1:0] data_out6,
-    output logic [DATA_WIDTH-1:0] data_out7,
-    output logic [DATA_WIDTH-1:0] data_out8
+    output logic [data_width-1:0] data_out1,
+    output logic [data_width-1:0] data_out2,
+    output logic [data_width-1:0] data_out3,
+    output logic [data_width-1:0] data_out4,
+    output logic [data_width-1:0] data_out5,
+    output logic [data_width-1:0] data_out6,
+    output logic [data_width-1:0] data_out7,
+    output logic [data_width-1:0] data_out8
 );
 
-    localparam LINE_WIDTH = DATA_WIDTH * LINE_WORDS;
-    localparam LINE_DEPTH = DEPTH / LINE_WORDS;
+    localparam line_width = data_width * line_words;
+    localparam line_depth = depth / line_words;
 
-    (* ram_style = "block" *) logic [LINE_WIDTH-1:0] line_array [0:LINE_DEPTH-1];
-    logic [LINE_WIDTH-1:0] line_q;
+    (* ram_style = "block" *) logic [line_width-1:0] line_array [0:line_depth-1];
+    logic [line_width-1:0] line_q;
     logic [10:0]           line_index;
 
     assign line_index = pc_in[15:5];
@@ -40,12 +40,12 @@ module Instruction_Memory #(
     assign data_out8 = line_q[255:224];
 
     initial begin
-        $readmemh("performance_l2_lines.mem", line_array, 0, LINE_DEPTH-1);
+        $readmemh("performance_l2_lines.mem", line_array, 0, line_depth-1);
     end
 
-    always_ff @(posedge CLK) begin
-        if (RST)
-            line_q <= {LINE_WORDS{32'h00000013}};
+    always_ff @(posedge clk) begin
+        if (rst)
+            line_q <= {line_words{32'h00000013}};
         else if (read_en)
             line_q <= line_array[line_index];
     end

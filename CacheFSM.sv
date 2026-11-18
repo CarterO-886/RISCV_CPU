@@ -3,8 +3,8 @@
 module CacheFSM (
     input  logic hit,
     input  logic miss,
-    input  logic CLK,
-    input  logic RST,
+    input  logic clk,
+    input  logic rst,
 
     output logic l2_read,
     output logic update,
@@ -12,50 +12,50 @@ module CacheFSM (
 );
 
     typedef enum logic [1:0] {
-        ST_READ_CACHE,
-        ST_READ_MEM,
-        ST_UPDATE_CACHE
+        st_read_cache,
+        st_read_mem,
+        st_update_cache
     } state_type;
 
-    state_type PS, NS;
+    state_type ps, ns;
 
-    always_ff @(posedge CLK) begin
-        if (RST)
-            PS <= ST_READ_CACHE;
+    always_ff @(posedge clk) begin
+        if (rst)
+            ps <= st_read_cache;
         else
-            PS <= NS;
+            ps <= ns;
     end
 
     always_comb begin
         l2_read  = 1'b0;
         update   = 1'b0;
         pc_stall = 1'b0;
-        NS       = PS;
+        ns       = ps;
 
-        case (PS)
-            ST_READ_CACHE: begin
+        case (ps)
+            st_read_cache: begin
                 if (miss) begin
                     pc_stall = 1'b1;
-                    NS       = ST_READ_MEM;
+                    ns       = st_read_mem;
                 end else begin
-                    NS = ST_READ_CACHE;
+                    ns = st_read_cache;
                 end
             end
 
-            ST_READ_MEM: begin
+            st_read_mem: begin
                 pc_stall = 1'b1;
                 l2_read  = 1'b1;
-                NS       = ST_UPDATE_CACHE;
+                ns       = st_update_cache;
             end
 
-            ST_UPDATE_CACHE: begin
+            st_update_cache: begin
                 pc_stall = 1'b1;
                 update   = 1'b1;
-                NS       = ST_READ_CACHE;
+                ns       = st_read_cache;
             end
 
             default: begin
-                NS = ST_READ_CACHE;
+                ns = st_read_cache;
             end
         endcase
     end

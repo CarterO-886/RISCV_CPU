@@ -45,29 +45,29 @@
 //////////////////////////////////////////////////////////////////////////////////
                                                                                                                              
   module Memory (
-    input MEM_CLK,
-    input MEM_RDEN1,        // read enable Instruction
-    input MEM_RDEN2,        // read enable data
-    input MEM_WE2,          // write enable.
-    input [13:0] MEM_ADDR1, // Instruction Memory word Addr (Connect to PC[15:2])
-    input [31:0] MEM_ADDR2, // Data Memory Addr
-    input [31:0] MEM_DIN2,  // Data to save
-    input [1:0] MEM_SIZE,   // 0-Byte, 1-Half, 2-Word
-    input MEM_SIGN,         // 1-unsigned 0-signed
-    input [31:0] IO_IN,     // Data from IO     
-    input CLR_DOUT1,
+    input mem_clk,
+    input mem_rden1,        // read enable Instruction
+    input mem_rden2,        // read enable data
+    input mem_we2,          // write enable.
+    input [13:0] mem_addr1, // Instruction Memory word Addr (Connect to PC[15:2])
+    input [31:0] mem_addr2, // Data Memory Addr
+    input [31:0] mem_din2,  // Data to save
+    input [1:0] mem_size,   // 0-Byte, 1-Half, 2-Word
+    input mem_sign,         // 1-unsigned 0-signed
+    input [31:0] io_in,     // Data from IO     
+    input clr_dout1,
     //output ERR,
-    output logic IO_WR,     // IO 1-write 0-read
-    output logic [31:0] MEM_DOUT1 = 32'h00000013,  // Instruction
-    output logic [31:0] MEM_DOUT2 = 32'h00000000); // Data
+    output logic io_wr,     // IO 1-write 0-read
+    output logic [31:0] mem_dout1 = 32'h00000013,  // Instruction
+    output logic [31:0] mem_dout2 = 32'h00000000); // Data
     
-    logic [13:0] wordAddr1, wordAddr2;
-    logic [31:0] memReadWord, ioBuffer, memReadSized;
-    logic [1:0] byteOffset;
-    logic mem_sign; // reg version of MEM_SIGN for loads
-    logic [1:0] mem_size; // reg version of MEM_SIZE for loads
-    logic [1:0] byteOffset_reg; // reg version of byteOffset for loads
-    logic weAddrValid; // active when saving (WE) to valid memory address
+    logic [13:0] wordaddr1, wordaddr2;
+    logic [31:0] memreadword, iobuffer, memreadsized;
+    logic [1:0] byteoffset;
+    logic mem_sign_reg;
+    logic [1:0] mem_size_reg;
+    logic [1:0] byteoffset_reg; // reg version of byteOffset for loads
+    logic weaddrvalid; // active when saving (WE) to valid memory address
     logic mmio_sel; // active when LOADing in the MMIO region
        
     (* rom_style="{distributed | block}" *)
@@ -77,33 +77,33 @@
         $readmemh("performance.mem", memory, 0, 16383);
     end
     
-    assign wordAddr2 = MEM_ADDR2[15:2];
-    assign byteOffset = MEM_ADDR2[1:0];     // byte offset of memory address
+    assign wordaddr2 = mem_addr2[15:2];
+    assign byteoffset = mem_addr2[1:0];     // byte offset of memory address
             
     // buffer the IO input for reading
-    always_ff @(posedge MEM_CLK) begin
-        if(MEM_RDEN2) begin
-            ioBuffer <= IO_IN;
+    always_ff @(posedge mem_clk) begin
+        if(mem_rden2) begin
+            iobuffer <= io_in;
             // Select signal used for deciding if
             // LOADs are in MMIO region or not
-            mmio_sel <= (MEM_ADDR2 >= 32'h00010000);
+            mmio_sel <= (mem_addr2 >= 32'h00010000);
         end
     end
     
     // BRAM requires all reads and writes to occur synchronously
-    always_ff @(posedge MEM_CLK) begin
+    always_ff @(posedge mem_clk) begin
     
       // save data (WD) to memory (ADDR2)
-      if (weAddrValid == 1) begin  //(MEM_WE == 1) && (MEM_ADDR2 < 16'hFFFD)) begin   // write enable and valid address space
-        case({MEM_SIZE,byteOffset})
-            4'b0000: memory[wordAddr2][7:0]   <= MEM_DIN2[7:0];     // sb at byte offsets
-            4'b0001: memory[wordAddr2][15:8]  <= MEM_DIN2[7:0];
-            4'b0010: memory[wordAddr2][23:16] <= MEM_DIN2[7:0];
-            4'b0011: memory[wordAddr2][31:24] <= MEM_DIN2[7:0];
-            4'b0100: memory[wordAddr2][15:0]  <= MEM_DIN2[15:0];    // sh at byte offsets
-            4'b0101: memory[wordAddr2][23:8]  <= MEM_DIN2[15:0];
-            4'b0110: memory[wordAddr2][31:16] <= MEM_DIN2[15:0];
-            4'b1000: memory[wordAddr2]        <= MEM_DIN2;          // sw
+      if (weaddrvalid == 1) begin  //(MEM_WE == 1) && (MEM_ADDR2 < 16'hFFFD)) begin   // write enable and valid address space
+        case({mem_size,byteoffset})
+            4'b0000: memory[wordaddr2][7:0]   <= mem_din2[7:0];     // sb at byte offsets
+            4'b0001: memory[wordaddr2][15:8]  <= mem_din2[7:0];
+            4'b0010: memory[wordaddr2][23:16] <= mem_din2[7:0];
+            4'b0011: memory[wordaddr2][31:24] <= mem_din2[7:0];
+            4'b0100: memory[wordaddr2][15:0]  <= mem_din2[15:0];    // sh at byte offsets
+            4'b0101: memory[wordaddr2][23:8]  <= mem_din2[15:0];
+            4'b0110: memory[wordaddr2][31:16] <= mem_din2[15:0];
+            4'b1000: memory[wordaddr2]        <= mem_din2;          // sw
 			
 			//default: memory[wordAddr2] <= 32'b0  // unsupported size, byte offset combination
 			// removed to avoid mistakes causing memory to be zeroed.
@@ -111,67 +111,67 @@
       end
 
         // read all data synchronously required for BRAM
-        if (CLR_DOUT1) // clear signal used for flush_DE signal
-            MEM_DOUT1 <= 32'h00000013;
-        else if(MEM_RDEN1) // need EN for extra load cycle to not change instruction
-            MEM_DOUT1 <= memory[MEM_ADDR1];
+        if (clr_dout1) // clear signal used for flush_DE signal
+            mem_dout1 <= 32'h00000013;
+        else if(mem_rden1) // need EN for extra load cycle to not change instruction
+            mem_dout1 <= memory[mem_addr1];
         
 
-        if(MEM_RDEN2) begin // Read word from memory
-            memReadWord <= memory[wordAddr2];
+        if(mem_rden2) begin // Read word from memory
+            memreadword <= memory[wordaddr2];
             // Register size, sign, and offset for reading
             // if this is not done, MEM_SIZE, MEM_SIGN, and the offset can change 
             // combinationally, causing issues with the below always_comb block
-            mem_size <= MEM_SIZE;
-            mem_sign <= MEM_SIGN;
-            byteOffset_reg <= byteOffset;
+            mem_size_reg <= mem_size;
+            mem_sign_reg <= mem_sign;
+            byteoffset_reg <= byteoffset;
         end 
     end
        
     // Change the data word into sized bytes and sign extend 
     always_comb begin
-        case({mem_sign,mem_size,byteOffset_reg})
-            5'b00011: memReadSized = {{24{memReadWord[31]}},memReadWord[31:24]};    // signed byte
-            5'b00010: memReadSized = {{24{memReadWord[23]}},memReadWord[23:16]};
-            5'b00001: memReadSized = {{24{memReadWord[15]}},memReadWord[15:8]};
-            5'b00000: memReadSized = {{24{memReadWord[7]}},memReadWord[7:0]};
+        case({mem_sign_reg,mem_size_reg,byteoffset_reg})
+            5'b00011: memreadsized = {{24{memreadword[31]}},memreadword[31:24]};    // signed byte
+            5'b00010: memreadsized = {{24{memreadword[23]}},memreadword[23:16]};
+            5'b00001: memreadsized = {{24{memreadword[15]}},memreadword[15:8]};
+            5'b00000: memreadsized = {{24{memreadword[7]}},memreadword[7:0]};
                                     
-            5'b00110: memReadSized = {{16{memReadWord[31]}},memReadWord[31:16]};    // signed half
-            5'b00101: memReadSized = {{16{memReadWord[23]}},memReadWord[23:8]};
-            5'b00100: memReadSized = {{16{memReadWord[15]}},memReadWord[15:0]};
+            5'b00110: memreadsized = {{16{memreadword[31]}},memreadword[31:16]};    // signed half
+            5'b00101: memreadsized = {{16{memreadword[23]}},memreadword[23:8]};
+            5'b00100: memreadsized = {{16{memreadword[15]}},memreadword[15:0]};
             
-            5'b01000: memReadSized = memReadWord;                   // word
+            5'b01000: memreadsized = memreadword;                   // word
                
-            5'b10011: memReadSized = {24'd0,memReadWord[31:24]};    // unsigned byte
-            5'b10010: memReadSized = {24'd0,memReadWord[23:16]};
-            5'b10001: memReadSized = {24'd0,memReadWord[15:8]};
-            5'b10000: memReadSized = {24'd0,memReadWord[7:0]};
+            5'b10011: memreadsized = {24'd0,memreadword[31:24]};    // unsigned byte
+            5'b10010: memreadsized = {24'd0,memreadword[23:16]};
+            5'b10001: memreadsized = {24'd0,memreadword[15:8]};
+            5'b10000: memreadsized = {24'd0,memreadword[7:0]};
                
-            5'b10110: memReadSized = {16'd0,memReadWord[31:16]};    // unsigned half
-            5'b10101: memReadSized = {16'd0,memReadWord[23:8]};
-            5'b10100: memReadSized = {16'd0,memReadWord[15:0]};
+            5'b10110: memreadsized = {16'd0,memreadword[31:16]};    // unsigned half
+            5'b10101: memreadsized = {16'd0,memreadword[23:8]};
+            5'b10100: memreadsized = {16'd0,memreadword[15:0]};
             
-            default:  memReadSized = 32'b0;     // unsupported size, byte offset combination 
+            default:  memreadsized = 32'b0;     // unsupported size, byte offset combination 
         endcase
     end
  
     // Memory Mapped IO 
     always_comb begin
         // writes
-        if (MEM_ADDR2 >= 32'h00010000) begin
+        if (mem_addr2 >= 32'h00010000) begin
             // writes in the mmio region
             // combinational, as store happens @ clock cycle N
-            IO_WR = MEM_WE2;
-            weAddrValid = 1'b0;
+            io_wr = mem_we2;
+            weaddrvalid = 1'b0;
         end else begin
             // writes to real dmem
-            IO_WR = 1'b0;
-            weAddrValid = MEM_WE2;
+            io_wr = 1'b0;
+            weaddrvalid = mem_we2;
         end
 
         // reads
         // uses registered mmio_sel, as load happens @ clock cycle N + 1
-        MEM_DOUT2 = mmio_sel ? ioBuffer : memReadSized;
+        mem_dout2 = mmio_sel ? iobuffer : memreadsized;
     end
         
  endmodule

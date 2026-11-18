@@ -1,45 +1,53 @@
 `timescale 1ns / 1ps
+//////////////////////////////////////////////////////////
+// Engineer: Carter Oates
+// Create Date: 5/24/26
+// Design Name: Unified RISCV L2 Cache Memory
+// Description: This design is a unified L2 memory that feeds in to L1 instruction and memory caches.
+// ///////////////////////////////////////////////////////              
+
+
 
 module L2_Memory #(
-    parameter ADDR_WIDTH = 32,
-    parameter DATA_WIDTH = 32,
-    parameter DEPTH      = 16384
+    parameter addr_width = 32,
+    parameter data_width = 32,
+    parameter depth      = 16384 //Number of uniquely addressable spaces
 )(
-    input  logic                  CLK,
-    input  logic                  RST,
+    input  logic                  clk,
+    input  logic                  rst,
 
     input  logic                  i_read_en,
-    input  logic [ADDR_WIDTH-1:0] i_addr,
-    output logic [DATA_WIDTH-1:0] i_out1,
-    output logic [DATA_WIDTH-1:0] i_out2,
-    output logic [DATA_WIDTH-1:0] i_out3,
-    output logic [DATA_WIDTH-1:0] i_out4,
-    output logic [DATA_WIDTH-1:0] i_out5,
-    output logic [DATA_WIDTH-1:0] i_out6,
-    output logic [DATA_WIDTH-1:0] i_out7,
-    output logic [DATA_WIDTH-1:0] i_out8,
+    input  logic [addr_width-1:0] i_addr,
+    output logic [data_width-1:0] i_out1,
+    output logic [data_width-1:0] i_out2,
+    output logic [data_width-1:0] i_out3,
+    output logic [data_width-1:0] i_out4,
+    output logic [data_width-1:0] i_out5,
+    output logic [data_width-1:0] i_out6,
+    output logic [data_width-1:0] i_out7,
+    output logic [data_width-1:0] i_out8,
 
     input  logic                  d_read_en,
     input  logic                  d_write_en,
-    input  logic [ADDR_WIDTH-1:0] d_read_addr,
-    input  logic [ADDR_WIDTH-1:0] d_write_addr,
-    input  logic [DATA_WIDTH-1:0] d_write_w0,
-    input  logic [DATA_WIDTH-1:0] d_write_w1,
-    input  logic [DATA_WIDTH-1:0] d_write_w2,
-    input  logic [DATA_WIDTH-1:0] d_write_w3,
-    output logic [DATA_WIDTH-1:0] d_out1,
-    output logic [DATA_WIDTH-1:0] d_out2,
-    output logic [DATA_WIDTH-1:0] d_out3,
-    output logic [DATA_WIDTH-1:0] d_out4
+    input  logic [addr_width-1:0] d_read_addr,
+    input  logic [addr_width-1:0] d_write_addr,
+    input  logic [data_width-1:0] d_write_w0,
+    input  logic [data_width-1:0] d_write_w1,
+    input  logic [data_width-1:0] d_write_w2,
+    input  logic [data_width-1:0] d_write_w3,
+    output logic [data_width-1:0] d_out1,
+    output logic [data_width-1:0] d_out2,
+    output logic [data_width-1:0] d_out3,
+    output logic [data_width-1:0] d_out4
 );
 
-    localparam LINE_WORDS = 8;
-    localparam LINE_WIDTH = DATA_WIDTH * LINE_WORDS;
-    localparam LINE_DEPTH = DEPTH / LINE_WORDS;
+    localparam line_words = 8;
+    localparam line_width = data_width * line_words;
+    localparam line_depth = depth / line_words;
 
-    (* ram_style = "block" *) logic [LINE_WIDTH-1:0] line_array [0:LINE_DEPTH-1];
-    logic [LINE_WIDTH-1:0] i_line_q;
-    logic [LINE_WIDTH-1:0] d_line_q;
+    (* ram_style = "block" *) logic [line_width-1:0] line_array [0:line_depth-1];
+    logic [line_width-1:0] i_line_q;
+    logic [line_width-1:0] d_line_q;
     logic                  d_read_upper_half_q;
 
     logic [10:0] i_line_index;
@@ -65,18 +73,18 @@ module L2_Memory #(
     assign d_out4 = d_read_upper_half_q ? d_line_q[255:224] : d_line_q[127:96];
 
     initial begin
-        $readmemh("performance_l2_lines.mem", line_array, 0, LINE_DEPTH-1);
+        $readmemh("performance_l2_lines.mem", line_array, 0, line_depth-1);
     end
 
-    always_ff @(posedge CLK) begin
-        if (RST)
-            i_line_q <= {LINE_WORDS{32'h00000013}};
+    always_ff @(posedge clk) begin
+        if (rst)
+            i_line_q <= {line_words{32'h00000013}};
         else if (i_read_en)
             i_line_q <= line_array[i_line_index];
     end
 
-    always_ff @(posedge CLK) begin
-        if (RST) begin
+    always_ff @(posedge clk) begin
+        if (rst) begin
             d_line_q <= '0;
             d_read_upper_half_q <= 1'b0;
         end else begin

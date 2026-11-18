@@ -1,9 +1,10 @@
 `timescale 1ns / 1ps
 
 module L1_D_Cache (
-    input  logic        CLK,
-    input  logic        RST,
+    input  logic        clk,
+    input  logic        rst,
 
+    //Inputs from EX/MEM register
     input  logic [31:0] alu_result,
     input  logic [31:0] rs2_data,
     input  logic        data_read,
@@ -11,16 +12,19 @@ module L1_D_Cache (
     input  logic [1:0]  mem_size,
     input  logic        mem_sign,
 
-    input  logic        FSM_write,
+    //Inputs from Data FSM
+    input  logic        fsm_write,
     input  logic [31:0] w0,
     input  logic [31:0] w1,
     input  logic [31:0] w2,
     input  logic [31:0] w3,
 
+    //Outputs to Data FSM 
     output logic        hit,
     output logic        miss,
     output logic [31:0] data,
 
+    //Outputs to L2 Memory
     output logic        evict_valid,
     output logic [31:0] evict_addr,
     output logic [31:0] evict_w0,
@@ -28,42 +32,46 @@ module L1_D_Cache (
     output logic [31:0] evict_w2,
     output logic [31:0] evict_w3
 );
+    // Set Associate Cache Parameters
+    localparam sets            = 4;
+    localparam ways            = 4;
+    localparam words_per_block = 4;
+    localparam tag_bits        = 26;
 
-    localparam SETS            = 4;
-    localparam WAYS            = 4;
-    localparam WORDS_PER_BLOCK = 4;
-    localparam TAG_BITS        = 26;
+    //Defining Set Associative Cache Data Structures
+    logic [31:0]         cache_data [sets-1:0][ways-1:0][words_per_block-1:0];
+    logic [tag_bits-1:0] cache_tags [sets-1:0][ways-1:0];
+    logic                valid_bits [sets-1:0][ways-1:0];
+    logic                dirty_bits [sets-1:0][ways-1:0];
+    logic [1:0]          lru_age [sets-1:0][ways-1:0]; // 0 = most recent, 3 = least recent
 
-    logic [31:0]         cache_data [SETS-1:0][WAYS-1:0][WORDS_PER_BLOCK-1:0];
-    logic [TAG_BITS-1:0] cache_tags [SETS-1:0][WAYS-1:0];
-    logic                valid_bits [SETS-1:0][WAYS-1:0];
-    logic                dirty_bits [SETS-1:0][WAYS-1:0];
-    logic [1:0]          lru_age [SETS-1:0][WAYS-1:0]; // 0 = most recent, 3 = least recent
-
+    //Intermediate Signals For Checking Hit/Miss, determining memory accesses
     logic [1:0]          addr_byte_off;
     logic [1:0]          addr_word_off;
     logic [1:0]          addr_index;
-    logic [TAG_BITS-1:0] addr_tag;
+    logic [tag_bits-1:0] addr_tag;
     logic [1:0]          victim_way;
     logic                request;
-    logic [WAYS-1:0]     way_hit;
+    logic [ways-1:0]     way_hit;
     logic [1:0]          hit_way;
     logic [31:0]         hit_word;
 
+    //Decoding incoming address into tag, index, and offset
     assign addr_byte_off = alu_result[1:0];
     assign addr_word_off = alu_result[3:2];
     assign addr_index    = alu_result[5:4];
     assign addr_tag      = alu_result[31:6];
-    assign request       = data_read || data_write;
+    assign request       = data_read || data_write; //Determing if a request is being made
 
+    //Generate ways
     genvar g;
     generate
-        for (g = 0; g < WAYS; g++) begin : way_hit_gen
-            assign way_hit[g] = valid_bits[addr_index][g] &&
-                                (cache_tags[addr_index][g] == addr_tag);
+        for (g = 0; g < ways; g++) begin : way_hit_gen
+            assign way_hit[g] = valid_bits[addr_index][g] && (cache_tags[addr_index][g] == addr_tag);
         end
     endgenerate
 
+    //Determine which way was hit
     always_comb begin
         case (1'b1)
             way_hit[3]: hit_way = 2'd3;
@@ -73,6 +81,7 @@ module L1_D_Cache (
         endcase
     end
 
+    //Determine which way to evict based on valid bits and LRU age
     always_comb begin
         if (!valid_bits[addr_index][0])
             victim_way = 2'd0;
@@ -92,10 +101,15 @@ module L1_D_Cache (
             victim_way = 2'd3;
     end
 
+
     assign hit      = request && (|way_hit);
     assign miss     = request && ~(|way_hit);
     assign hit_word = cache_data[addr_index][hit_way][addr_word_off];
 
+    /*
+        Search way and determine exact location of data
+
+    */
     always_comb begin
         data = 32'b0;
 
@@ -126,9 +140,15 @@ module L1_D_Cache (
         end
     end
 
+    /*
+
+        Predetermine which blocks of data to evict from individual ways
+        Also determine the current block that is next evicted
+
+    */
+
     always_comb begin
-        evict_valid = miss && valid_bits[addr_index][victim_way] &&
-                             dirty_bits[addr_index][victim_way];
+        evict_valid = miss && valid_bits[addr_index][victim_way] && dirty_bits[addr_index][victim_way];
         evict_addr  = {cache_tags[addr_index][victim_way], addr_index, 4'b0000};
         evict_w0    = cache_data[addr_index][victim_way][0];
         evict_w1    = cache_data[addr_index][victim_way][1];
@@ -136,30 +156,32 @@ module L1_D_Cache (
         evict_w3    = cache_data[addr_index][victim_way][3];
     end
 
+    //Initial setup of cache upon startup
     initial begin
-        for (int i = 0; i < SETS; i++) begin
-            for (int j = 0; j < WAYS; j++) begin
+        for (int i = 0; i < sets; i++) begin
+            for (int j = 0; j < ways; j++) begin
                 valid_bits[i][j] = 1'b0;
                 dirty_bits[i][j] = 1'b0;
                 cache_tags[i][j] = '0;
                 lru_age[i][j]    = j[1:0];
-                for (int k = 0; k < WORDS_PER_BLOCK; k++)
+                for (int k = 0; k < words_per_block; k++)
                     cache_data[i][j][k] = 32'b0;
             end
         end
     end
 
-    always_ff @(posedge CLK) begin
-        if (RST) begin
-            for (int i = 0; i < SETS; i++) begin
-                for (int j = 0; j < WAYS; j++) begin
+    //Write logic
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            for (int i = 0; i < sets; i++) begin
+                for (int j = 0; j < ways; j++) begin
                     valid_bits[i][j] <= 1'b0;
                     dirty_bits[i][j] <= 1'b0;
                     lru_age[i][j]    <= j[1:0];
                 end
             end
         end else begin
-            if (FSM_write) begin
+            if (fsm_write) begin
                 cache_data[addr_index][victim_way][0] <= w0;
                 cache_data[addr_index][victim_way][1] <= w1;
                 cache_data[addr_index][victim_way][2] <= w2;
@@ -168,7 +190,7 @@ module L1_D_Cache (
                 valid_bits[addr_index][victim_way]    <= 1'b1;
                 dirty_bits[addr_index][victim_way]    <= 1'b0;
 
-                for (int j = 0; j < WAYS; j++) begin
+                for (int j = 0; j < ways; j++) begin
                     if (j[1:0] == victim_way)
                         lru_age[addr_index][j] <= 2'd0;
                     else if (valid_bits[addr_index][j] && (lru_age[addr_index][j] != 2'd3))
@@ -177,7 +199,7 @@ module L1_D_Cache (
             end
 
             if (hit) begin
-                for (int j = 0; j < WAYS; j++) begin
+                for (int j = 0; j < ways; j++) begin
                     if (j[1:0] == hit_way)
                         lru_age[addr_index][j] <= 2'd0;
                     else if (valid_bits[addr_index][j] &&

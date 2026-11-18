@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 
 module Data_FSM (
-    input  logic CLK,
-    input  logic RST,
+    input  logic clk,
+    input  logic rst,
 
     input  logic data_read,
     input  logic data_write,
@@ -10,80 +10,80 @@ module Data_FSM (
     input  logic miss,
     input  logic evict_valid,
 
-    output logic FSM_write,
+    output logic fsm_write,
     output logic l2_read,
     output logic l2_write,
     output logic stall
 );
 
     typedef enum logic [2:0] {
-        ST_CHECK_L1,
-        ST_WRITE_L2,
-        ST_READ_L2,
-        ST_FILL_L1,
-        ST_RETRY_L1
+        st_check_l1,
+        st_write_l2,
+        st_read_l2,
+        st_fill_l1,
+        st_retry_l1
     } state_type;
 
-    state_type PS, NS;
+    state_type ps, ns;
 
     logic request;
 
     assign request = data_read || data_write;
 
-    always_ff @(posedge CLK) begin
-        if (RST)
-            PS <= ST_CHECK_L1;
+    always_ff @(posedge clk) begin
+        if (rst)
+            ps <= st_check_l1;
         else
-            PS <= NS;
+            ps <= ns;
     end
 
     always_comb begin
-        FSM_write = 1'b0;
+        fsm_write = 1'b0;
         l2_read   = 1'b0;
         l2_write  = 1'b0;
         stall     = 1'b0;
-        NS        = PS;
+        ns        = ps;
 
-        case (PS)
-            ST_CHECK_L1: begin
+        case (ps)
+            st_check_l1: begin
                 if (request && miss) begin
                     stall = 1'b1;
-                    NS    = evict_valid ? ST_WRITE_L2 : ST_READ_L2;
+                    ns    = evict_valid ? st_write_l2 : st_read_l2;
                 end
             end
 
-            ST_WRITE_L2: begin
+            st_write_l2: begin
                 stall    = 1'b1;
                 l2_write = 1'b1;
-                NS       = ST_READ_L2;
+                ns       = st_read_l2;
             end
 
-            ST_READ_L2: begin
+            st_read_l2: begin
                 stall   = 1'b1;
                 l2_read = 1'b1;
-                NS      = ST_FILL_L1;
+                ns      = st_fill_l1;
             end
 
-            ST_FILL_L1: begin
+            st_fill_l1: begin
                 stall     = 1'b1;
-                FSM_write = 1'b1;
-                NS        = ST_RETRY_L1;
+                fsm_write = 1'b1;
+                ns        = st_retry_l1;
             end
 
-            ST_RETRY_L1: begin
+            st_retry_l1: begin
                 if (request && hit) begin
                     stall = 1'b0;
-                    NS    = ST_CHECK_L1;
+                    ns    = st_check_l1;
                 end else if (request && miss) begin
                     stall = 1'b1;
-                    NS    = evict_valid ? ST_WRITE_L2 : ST_READ_L2;
+                    ns    = evict_valid ? st_write_l2 : st_read_l2;
                 end else begin
-                    NS = ST_CHECK_L1;
+                    ns = st_check_l1;
                 end
             end
 
             default: begin
-                NS = ST_CHECK_L1;
+                ns = st_check_l1;
             end
         endcase
     end
