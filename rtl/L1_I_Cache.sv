@@ -1,5 +1,16 @@
 `timescale 1ns / 1ps
 
+/*
+Engineer: Carter Oates
+Description: 16 block direct mapped instruction cache for fast instruction fetch
+             Solves spatial locality through mapping blocks of instructions that nearby to one another within program
+             When a miss occurs, all blocks are replaced with spatially local instructions from a 
+             different part of program instruction
+             
+
+
+*/
+
 module L1_I_Cache (
     input  logic [31:0] PC,
     input  logic        clk,
@@ -33,31 +44,26 @@ module L1_I_Cache (
     logic [word_offset_size-1:0] pc_offset;
     logic [tag_size-1:0]  pc_tag;
 
+    //PC Address Concantenation {tag, index, offset}
+    assign pc_tag    = PC[31:9];
     assign index     = PC[8:5];
     assign pc_offset = PC[4:2];
-    assign pc_tag    = PC[31:9];
+
+    //Detemermine data presence
     assign hit       = valid_bits[index] && (tags[index] == pc_tag);
-    assign miss      = ~hit;
+    assign miss      = ~hit; //being outputted constantly
 
-    always_comb begin
-        rd = 32'h00000013; // nop
-        if (hit)
-            rd = data[index][pc_offset];
-    end
-
-    initial begin
-        for (int i = 0; i < num_blocks; i++) begin
-            tags[i]       = '0;
-            valid_bits[i] = 1'b0;
-            for (int j = 0; j < block_size; j++)
-                data[i][j] = 32'b0;
-        end
-    end
 
     always_ff @(posedge clk) begin
         if (rst) begin
-            for (int i = 0; i < num_blocks; i++)
-                valid_bits[i] <= 1'b0;
+            valid_bits = 0';
+            data = 0';
+            tags = 0';
+        end else begin
+            if (hit) begin
+                rd = data[index][pc_offset];
+            end
+        end
         end else if (update) begin
             data[index][0]    <= w0;
             data[index][1]    <= w1;
@@ -71,5 +77,4 @@ module L1_I_Cache (
             valid_bits[index] <= 1'b1;
         end
     end
-
 endmodule
